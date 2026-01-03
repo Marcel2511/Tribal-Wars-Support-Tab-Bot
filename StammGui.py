@@ -46,6 +46,8 @@ class StammGUI:
         self.einheiten_speed = 1.0
         self.welt_id = ""
         self.boost_level = 0
+        self.zeitfenster_liste = []
+        self.zeitfenster_tree = None 
 
         self.build_gui()
         self.lade_tabverlauf()
@@ -122,19 +124,76 @@ class StammGUI:
         bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
         bottom_frame.grid(row=4, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
 
-        ttk.Label(bottom_frame, text="Von:").grid(row=0, column=0, padx=(5, 2))
+        # Damit Treeview sauber strecken kann
+        bottom_frame.columnconfigure(0, weight=1)
+        bottom_frame.rowconfigure(1, weight=1)
+
+        # --- Eingabezeile (row 0) ---
+        ttk.Label(bottom_frame, text="Von:").grid(row=0, column=0, padx=(5, 2), sticky="w")
         self.from_entry = ttk.Entry(bottom_frame, width=20)
-        self.from_entry.grid(row=0, column=1, padx=(0, 2))
+        self.from_entry.grid(row=0, column=1, padx=(0, 2), sticky="w")
         ttk.Button(bottom_frame, text="Wählen", command=lambda: self.datum_popup("Von", self.from_entry)).grid(row=0, column=2, padx=(0, 2))
         ttk.Button(bottom_frame, text="X", width=2, command=lambda: self.from_entry.delete(0, tk.END)).grid(row=0, column=3, padx=(0, 10))
 
-        ttk.Label(bottom_frame, text="Bis:").grid(row=0, column=4, padx=(10, 2))
+        ttk.Label(bottom_frame, text="Bis:").grid(row=0, column=4, padx=(10, 2), sticky="w")
         self.to_entry = ttk.Entry(bottom_frame, width=20)
-        self.to_entry.grid(row=0, column=5, padx=(0, 2))
+        self.to_entry.grid(row=0, column=5, padx=(0, 2), sticky="w")
         ttk.Button(bottom_frame, text="Wählen", command=lambda: self.datum_popup("Bis", self.to_entry)).grid(row=0, column=6, padx=(0, 2))
         ttk.Button(bottom_frame, text="X", width=2, command=lambda: self.to_entry.delete(0, tk.END)).grid(row=0, column=7, padx=(0, 10))
 
-        ttk.Button(bottom_frame, text="Berechne Tabs", command=self.berechne_tabs).grid(row=0, column=8, padx=(20, 10), ipadx=40, ipady=10, sticky="e")
+        ttk.Button(
+            bottom_frame,
+            text="Zeitfenster hinzufügen",
+            command=self.zeitfenster_hinzufuegen
+        ).grid(row=0, column=8, padx=(10, 10), ipadx=10, sticky="e")
+
+        # --- Liste (row 1) ---
+        tree_frame = ttk.Frame(bottom_frame)
+        tree_frame.grid(row=1, column=0, columnspan=9, sticky="nsew", padx=5, pady=(10, 5))
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+
+        self.zeitfenster_tree = ttk.Treeview(
+            tree_frame,
+            columns=("von", "bis"),
+            show="headings",
+            height=5,
+            selectmode="browse"
+        )
+        self.zeitfenster_tree.heading("von", text="Von")
+        self.zeitfenster_tree.heading("bis", text="Bis")
+        self.zeitfenster_tree.column("von", width=240, anchor="w")
+        self.zeitfenster_tree.column("bis", width=240, anchor="w")
+
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.zeitfenster_tree.yview)
+        self.zeitfenster_tree.configure(yscrollcommand=scroll.set)
+
+        self.zeitfenster_tree.grid(row=0, column=0, sticky="nsew")
+        scroll.grid(row=0, column=1, sticky="ns")
+
+        # --- Button-Leiste (row 2) ---
+        action_frame = ttk.Frame(bottom_frame)
+        action_frame.grid(row=2, column=0, columnspan=9, sticky="ew", padx=5, pady=(5, 8))
+        action_frame.columnconfigure(0, weight=1)
+
+        # links
+        left_btns = ttk.Frame(action_frame)
+        left_btns.grid(row=0, column=0, sticky="w")
+
+        ttk.Button(left_btns, text="Entfernen", command=self.zeitfenster_entfernen).pack(side="left", padx=(0, 6))
+        ttk.Button(left_btns, text="Alle löschen", command=self.zeitfenster_alle_loeschen).pack(side="left")
+
+        # rechts
+        right_btns = ttk.Frame(action_frame)
+        right_btns.grid(row=0, column=1, sticky="e")
+
+        ttk.Button(right_btns, text="Berechne Tabs", command=self.berechne_tabs).pack(side="left", padx=(0, 8), ipadx=25, ipady=6)
+
+        # Export-Button: stabil im Layout, anfangs deaktiviert
+        self.export_button = ttk.Button(right_btns, text="Exportieren", command=self.exportiere, state="disabled")
+        self.export_button.pack(side="left", ipadx=20, ipady=6)
+
+
 
     def tab_kombi_hinzufuegen(self):
         kombi = {}
@@ -185,6 +244,88 @@ class StammGUI:
         self.tab_config_display.delete(0, tk.END)
         self.tabgroessen_liste.clear()
 
+    def _parse_dt_mit_sekunden(self, s: str):
+        s = (s or "").strip()
+        if not s:
+            return None
+        return datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
+
+
+    def _format_dt_mit_sekunden(self, dt: datetime) -> str:
+        return dt.strftime("%d.%m.%Y %H:%M:%S")
+
+
+    def _zeitfenster_tree_refresh(self):
+        if not self.zeitfenster_tree:
+            return
+
+        for iid in self.zeitfenster_tree.get_children():
+            self.zeitfenster_tree.delete(iid)
+
+        # iids als Index -> Entfernen ist einfach und stabil, weil wir nach jeder Änderung neu aufbauen
+        for idx, (von_dt, bis_dt) in enumerate(self.zeitfenster_liste):
+            self.zeitfenster_tree.insert(
+                "", "end",
+                iid=str(idx),
+                values=(self._format_dt_mit_sekunden(von_dt), self._format_dt_mit_sekunden(bis_dt))
+            )
+
+
+    def zeitfenster_hinzufuegen(self):
+        try:
+            von_dt = self._parse_dt_mit_sekunden(self.from_entry.get())
+            bis_dt = self._parse_dt_mit_sekunden(self.to_entry.get())
+        except ValueError:
+            messagebox.showerror("Zeitfenster Fehler", "Ungültiges Datum/Zeit-Format. Erwartet: TT.MM.JJJJ HH:MM:SS")
+            return
+
+        if not von_dt or not bis_dt:
+            messagebox.showerror("Zeitfenster Fehler", "Bitte sowohl 'Von' als auch 'Bis' setzen.")
+            return
+
+        if bis_dt <= von_dt:
+            messagebox.showerror("Zeitfenster Fehler", "Das 'Bis'-Datum muss nach dem 'Von'-Datum liegen.")
+            return
+
+        # optional: Duplikate verhindern
+        if (von_dt, bis_dt) in self.zeitfenster_liste:
+            messagebox.showinfo("Hinweis", "Dieses Zeitfenster ist bereits vorhanden.")
+            return
+
+        self.zeitfenster_liste.append((von_dt, bis_dt))
+        self.zeitfenster_liste.sort(key=lambda x: x[0])
+
+        self._zeitfenster_tree_refresh()
+
+        # optional: Eingabefelder leeren
+        self.from_entry.delete(0, tk.END)
+        self.to_entry.delete(0, tk.END)
+
+
+    def zeitfenster_entfernen(self):
+        if not self.zeitfenster_tree:
+            return
+
+        sel = self.zeitfenster_tree.selection()
+        if not sel:
+            messagebox.showinfo("Hinweis", "Bitte ein Zeitfenster in der Liste auswählen.")
+            return
+
+        try:
+            idx = int(sel[0])
+        except ValueError:
+            return
+
+        if 0 <= idx < len(self.zeitfenster_liste):
+            self.zeitfenster_liste.pop(idx)
+            self._zeitfenster_tree_refresh()
+
+
+    def zeitfenster_alle_loeschen(self):
+        self.zeitfenster_liste.clear()
+        self._zeitfenster_tree_refresh()
+
+
     def berechne_tabs(self):
         try:
             welt_id = self.welt_id_entry.get().strip()
@@ -201,18 +342,23 @@ class StammGUI:
             angriffe = SosParser.parse(sos_text)
             eigene_dörfer = EigeneTruppenParser.parse(truppen_text)
 
-            zeitfenster_von = self.from_entry.get().strip()
-            zeitfenster_bis = self.to_entry.get().strip()
+            # Zeitfenster (immer als Liste; wenn leer -> keine Einschränkung)
+            tz = pytz.timezone("Europe/Berlin")
 
-            von_dt = datetime.strptime(zeitfenster_von, "%d.%m.%Y %H:%M:%S") if zeitfenster_von else None
-            bis_dt = datetime.strptime(zeitfenster_bis, "%d.%m.%Y %H:%M:%S") if zeitfenster_bis else None
+            zeitfenster_liste_tz = []
+            for von_dt, bis_dt in getattr(self, "zeitfenster_liste", []):
+                # GUI speichert naive datetime; hier auf Europe/Berlin lokalisieren
+                von_dt_tz = tz.localize(von_dt) if von_dt and von_dt.tzinfo is None else von_dt
+                bis_dt_tz = tz.localize(bis_dt) if bis_dt and bis_dt.tzinfo is None else bis_dt
 
-            if von_dt and bis_dt and bis_dt < von_dt:
-                messagebox.showerror("Zeitfenster Fehler", "Das 'Bis'-Datum darf nicht vor dem 'Von'-Datum liegen.")
-                return
+                if not von_dt_tz or not bis_dt_tz:
+                    continue
+                if bis_dt_tz < von_dt_tz:
+                    messagebox.showerror("Zeitfenster Fehler", "Ein Zeitfenster hat 'Bis' vor 'Von'.")
+                    return
 
-            von_dt = pytz.timezone("Europe/Berlin").localize(von_dt) if von_dt else None
-            bis_dt = pytz.timezone("Europe/Berlin").localize(bis_dt) if bis_dt else None
+                zeitfenster_liste_tz.append((von_dt_tz, bis_dt_tz))
+
 
             try:
                 boost_val = int(self.boost_entry.get().strip())
@@ -232,17 +378,15 @@ class StammGUI:
                 tabgroessen_liste=self.tabgroessen_liste,
                 welt_speed=self.welt_speed,
                 einheiten_speed=self.einheiten_speed,
-                zeitfenster_von=von_dt,
-                zeitfenster_bis=bis_dt,
-                boost_level=self.boost_level  
+                zeitfenster_liste=zeitfenster_liste_tz,
+                boost_level=self.boost_level
             )
 
             print(f"{len(self.matches)} Tabs gefunden und bereit zum Export")
 
             if self.export_button:
-                self.export_button.destroy()
-            self.export_button = ttk.Button(self.tk_root, text="Exportieren", command=self.exportiere)
-            self.export_button.grid(row=5, column=0, columnspan=4, pady=10)
+                self.export_button.config(state="normal" if self.matches else "disabled")
+
 
         except Exception as e:
             print(f"Fehler bei der Tabberechnung: {e}")

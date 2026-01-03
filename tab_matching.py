@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import BytesIO
 from tkinter import ttk
-from typing import Dict, List
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import pytz
 import requests
@@ -32,8 +32,7 @@ class TabMatching:
         tabgroessen_liste: List[Dict[str, int]],
         welt_speed: float = 1.0,
         einheiten_speed: float = 1.0,
-        zeitfenster_von: datetime = None,
-        zeitfenster_bis: datetime = None,
+        zeitfenster_liste=None,
         boost_level: int = 1
     ) -> List[TabMatch]:
         print(f"[INFO] {len(angriffe)} Angriffe, {len(eigene_dörfer)} eigene Dörfer verarbeitet")
@@ -105,9 +104,7 @@ class TabMatching:
                         # Zeitfensterprüfung
                         if abschick < now:
                             continue
-                        if zeitfenster_von and abschick < zeitfenster_von:
-                            continue
-                        if zeitfenster_bis and abschick > zeitfenster_bis:
+                        if not TabMatching.pruefe_in_einem_beliebigen_zeitfenster(abschick, zeitfenster_liste):
                             continue
 
                         tab = TabMatch(
@@ -132,6 +129,23 @@ class TabMatching:
         TabMatching.zeige_popup(len(angriffe), len(matches))
         return matches
 
+
+    @staticmethod
+    def pruefe_in_einem_beliebigen_zeitfenster(ts: datetime, zeitfenster_liste) -> bool:
+        """
+        True, wenn ts in mindestens einem Fenster liegt.
+        Grenzen inklusiv: von <= ts <= bis
+        """
+        if not zeitfenster_liste:
+            # Wenn keine Fenster übergeben werden, gilt: keine Einschränkung
+            return True
+
+        for von, bis in zeitfenster_liste:
+            if von is None or bis is None:
+                continue
+            if von <= ts <= bis:
+                return True
+        return False
 
     @staticmethod
     def zeige_popup(anz_angriffe: int, anz_tabs: int):

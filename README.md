@@ -16,7 +16,7 @@ Ein Desktop-Tool für "Die Stämme" (Tribal Wars) zur Berechnung optimaler Unter
 ### Option 1: Ausführbare Datei (.exe)
 
 1. **Download von GitHub Releases:**
-   - Gehe zu den [Releases](https://github.com/MarcoMue/Tribal-Wars-Support-Tab-Bot/releases)
+   - Gehe zu den [Releases](https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/releases)
    - Lade die neueste Version herunter
    - Führe `StammGui.exe` aus
    - Keine Python-Installation erforderlich!
@@ -25,7 +25,7 @@ Ein Desktop-Tool für "Die Stämme" (Tribal Wars) zur Berechnung optimaler Unter
 
 ```bash
 # Repository klonen
-git clone https://github.com/MarcoMue/Tribal-Wars-Support-Tab-Bot.git
+git clone https://https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot
 cd Tribal-Wars-Support-Tab-Bot
 
 # Virtuelle Umgebung erstellen (empfohlen)
@@ -54,9 +54,9 @@ python StammGui.py
 
 1. **Welt-ID eingeben**: z.B. "221" für de221.die-staemme.de
 2. **SOS-Daten einfügen**: Angriffsdaten aus dem Spiel kopieren
-3. **Truppen-Übersicht einfügen**: Eigene Truppen aus dem Spiel kopieren
+3. **Truppen-Übersicht einfügen**: Eigene Truppen aus dem Spiel kopieren (Strg A + Strg C in der Truppenübersicht)
 4. **Truppen-Kombinationen konfigurieren**: Gewünschte Tab-Größen festlegen
-5. **Zeitfenster setzen**: Von/Bis-Zeitpunkt für Tabs definieren
+5. **Zeitfenster setzen**: Beliebig viele Von/Bis-Zeitfenster setzen um Abschickzeitpunkte festzulegen
 6. **Tabs berechnen**: Optimale Zuordnung ermitteln
 7. **Export**: Ergebnis für DS Ultimate exportieren
 
@@ -93,14 +93,6 @@ Tribal-Wars-Support-Tab-Bot/
 
 ## 🔧 Entwicklung
 
-### Automatische Releases (GitHub Actions)
-
-Das Repository verwendet GitHub Actions für automatische Releases:
-
-- **Release Workflow**: Erstellt bei Git-Tags automatisch Releases mit .exe-Datei
-- **Download**: Direkt von der GitHub Releases-Seite
-- **Trigger**: Nur bei neuen Version-Tags (z.B. `v1.0.0`)
-
 #### Release erstellen
 
 ```bash
@@ -116,7 +108,7 @@ git push origin v1.0.0
 
 #### Download für Benutzer
 
-1. Gehe zu [Releases](https://github.com/MarcoMue/Tribal-Wars-Support-Tab-Bot/releases)
+1. Gehe zu [Releases](https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/releases)
 2. Lade `StammGui.exe` aus dem neuesten Release herunter
 3. Keine weitere Installation nötig!
 
@@ -141,7 +133,7 @@ Die fertige .exe-Datei befindet sich dann im `dist/` Ordner.
 - **EigeneTruppenParser**: Parser für Truppen-Übersichten
 - **TabMatching**: Algorithmus für optimale Tab-Zuordnung
 - **DistanzRechner**: Berechnung von Koordinaten-Entfernungen
-- **Einheiten**: Definitionen für Laufzeiten und Aliase
+- **Einheiten**: Definitionen für Laufzeiten und Laufzeitmanipulation
 
 #### Datenstrukturen:
 
@@ -199,8 +191,8 @@ Beiträge sind willkommen! Bitte erstelle einen Pull Request oder öffne ein Iss
 
 Bei Fragen oder Problemen:
 
-- Öffne ein [Issue](https://github.com/MarcoMue/Tribal-Wars-Support-Tab-Bot/issues)
-- Kontaktiere den Entwickler
+- Öffne ein [Issue](https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/issues)
+- Kontaktiere den Entwickler (Discord: marcel6301)
 
 ---
 
