@@ -23,6 +23,9 @@ from PIL import Image, ImageTk
 from eigene_truppen_parser import EigeneTruppenParser
 from sos_parser import SosParser
 from tab_matching import TabMatching
+from support_parser import SupportParser
+from bisect import bisect_left
+
 
 
 class StammGUI:
@@ -34,10 +37,11 @@ class StammGUI:
         ANWENDER_PFAD = os.path.dirname(os.path.abspath(__file__))
 
     VERLAUF_DATEI = os.path.join(ANWENDER_PFAD, "tabverlauf.json")
+    CONFIG_DATEI = os.path.join(ANWENDER_PFAD, "config.json")
 
     def __init__(self, root):
         self.tk_root = root
-        self.tk_root.title("Die Stämme SOS Tool")
+        self.tk_root.title("Die Stämme Tab-Tool V3.0 by Marcel Wollbaum")
 
         self.matches = []
         self.tabgroessen_liste = []
@@ -51,6 +55,9 @@ class StammGUI:
 
         self.build_gui()
         self.lade_tabverlauf()
+        self.dsu_api_key = ""
+        self.archer_enabled = False
+        self.lade_config()
 
     def build_gui(self):
         self.text_fields = {}
@@ -69,6 +76,11 @@ class StammGUI:
         self.boost_entry = ttk.Entry(self.tk_root, width=5)
         self.boost_entry.insert(0, "0")
         self.boost_entry.grid(row=1, column=3, sticky="nw", padx=5, pady=(2, 2))
+
+        ttk.Label(self.tk_root, text="Support-Filter (+Sek. nach Angriff):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
+        self.support_filter_seconds_entry = ttk.Entry(self.tk_root, width=5)
+        self.support_filter_seconds_entry.insert(0, "0")
+        self.support_filter_seconds_entry.grid(row=2, column=3, sticky="nw", padx=5, pady=(2, 2))
 
         self.einheiten = {
             "Speerträger": "unit_spear.webp",
@@ -187,12 +199,198 @@ class StammGUI:
         right_btns = ttk.Frame(action_frame)
         right_btns.grid(row=0, column=1, sticky="e")
 
-        ttk.Button(right_btns, text="Berechne Tabs", command=self.berechne_tabs).pack(side="left", padx=(0, 8), ipadx=25, ipady=6)
+        ttk.Button(right_btns, text="Menü", command=self.zeige_menue_fenster).pack(
+            side="left", padx=(0, 8), ipadx=20, ipady=6
+        )
+        ttk.Button(right_btns, text="Kontakt", command=self.zeige_kontakt_fenster).pack(
+            side="left", padx=(0, 12), ipadx=20, ipady=6
+        )
 
-        # Export-Button: stabil im Layout, anfangs deaktiviert
+        ttk.Button(right_btns, text="Berechne Tabs", command=self.berechne_tabs).pack(
+            side="left", padx=(0, 8), ipadx=25, ipady=6
+        )
+
         self.export_button = ttk.Button(right_btns, text="Exportieren", command=self.exportiere, state="disabled")
         self.export_button.pack(side="left", ipadx=20, ipady=6)
 
+
+    def zeige_kontakt_fenster(self):
+        popup = tk.Toplevel(self.tk_root)
+        popup.title("Kontakt")
+        popup.geometry("480x260")
+        popup.resizable(False, False)
+
+        container = ttk.Frame(popup, padding=12)
+        container.pack(fill="both", expand=True)
+
+        # === Daten ===
+        autor = "Marcel Wollbaum"
+        version = "V3.0"
+        discord_handle = "DEIN_DISCORD_HANDLE"  # <-- hier eintragen
+        github_repo = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
+
+        # === Überschrift ===
+        ttk.Label(
+            container,
+            text="Die Stämme SOS Tool",
+            font=("Segoe UI", 12, "bold")
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
+
+        ttk.Label(container, text=f"Version: {version}").grid(
+            row=1, column=0, columnspan=3, sticky="w"
+        )
+        ttk.Label(container, text=f"Autor: {autor}").grid(
+            row=2, column=0, columnspan=3, sticky="w", pady=(0, 12)
+        )
+
+        # === Discord ===
+        ttk.Label(container, text="Discord:").grid(row=3, column=0, sticky="w")
+        ttk.Label(container, text=discord_handle).grid(
+            row=3, column=1, sticky="w", padx=(6, 6)
+        )
+        ttk.Button(
+            container,
+            text="Kopieren",
+            command=lambda: self._copy_to_clipboard(discord_handle)
+        ).grid(row=3, column=2, sticky="e")
+
+        # === GitHub ===
+        ttk.Label(container, text="GitHub:").grid(
+            row=4, column=0, sticky="w", pady=(10, 0)
+        )
+        ttk.Label(container, text=github_repo).grid(
+            row=4, column=1, sticky="w", padx=(6, 6), pady=(10, 0)
+        )
+
+        gh_btns = ttk.Frame(container)
+        gh_btns.grid(row=4, column=2, sticky="e", pady=(10, 0))
+        ttk.Button(
+            gh_btns,
+            text="Kopieren",
+            command=lambda: self._copy_to_clipboard(github_repo)
+        ).pack(side="left", padx=(0, 6))
+        ttk.Button(
+            gh_btns,
+            text="Öffnen",
+            command=lambda: self._open_url(github_repo)
+        ).pack(side="left")
+
+        # === Schließen ===
+        ttk.Button(
+            container,
+            text="Schließen",
+            command=popup.destroy
+        ).grid(row=6, column=2, sticky="e", pady=(20, 0))
+
+        container.columnconfigure(1, weight=1)
+
+    
+    def lade_config(self):
+        try:
+            if os.path.exists(self.CONFIG_DATEI):
+                with open(self.CONFIG_DATEI, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                self.dsu_api_key = (cfg.get("dsu_api_key") or "")
+                self.archer_enabled = bool(cfg.get("archer_enabled", False))
+        except Exception as e:
+            print(f"Fehler beim Laden der Config: {e}")
+
+    def speichere_config(self):
+        try:
+            cfg = {
+                "dsu_api_key": self.dsu_api_key,
+                "archer_enabled": self.archer_enabled,
+            }
+            with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Fehler beim Speichern der Config: {e}")
+
+    def _copy_to_clipboard(self, text: str):
+        try:
+            self.tk_root.clipboard_clear()
+            self.tk_root.clipboard_append(text)
+        except Exception as e:
+            print(f"Clipboard Fehler: {e}")
+
+    def _open_url(self, url: str):
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception as e:
+            print(f"Browser öffnen fehlgeschlagen: {e}")  
+
+    def zeige_menue_fenster(self):
+        popup = tk.Toplevel(self.tk_root)
+        popup.title("Menü")
+        popup.geometry("520x320")
+        popup.resizable(False, False)
+
+        container = ttk.Frame(popup, padding=12)
+        container.pack(fill="both", expand=True)
+
+        # --- DSU API Key ---
+        ttk.Label(container, text="DSU-API-Key", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            container,
+            text="Hinweis: Den DSU-API-Key bekommst du auf dem Discord (DEIN_DISCORD_HANDLE) oder direkt bei mir via Discord.",
+            wraplength=490
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 10))
+
+        key_var = tk.StringVar(value=self.dsu_api_key)
+        show_var = tk.BooleanVar(value=False)
+
+        key_entry = ttk.Entry(container, textvariable=key_var, width=55, show="*")
+        key_entry.grid(row=2, column=0, columnspan=2, sticky="w")
+
+        def toggle_show():
+            key_entry.config(show="" if show_var.get() else "*")
+
+        ttk.Checkbutton(container, text="anzeigen", variable=show_var, command=toggle_show).grid(row=2, column=2, sticky="e", padx=(8, 0))
+
+        def speichern():
+            self.dsu_api_key = key_var.get().strip()
+            self.speichere_config()
+            popup.title("Menü (API-Key gespeichert)")
+            popup.after(1200, lambda: popup.title("Menü"))
+
+        def loeschen():
+            self.dsu_api_key = ""
+            key_var.set("")
+            self.speichere_config()
+            popup.title("Menü (API-Key gelöscht)")
+            popup.after(1200, lambda: popup.title("Menü"))
+
+        btnrow = ttk.Frame(container)
+        btnrow.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 14))
+        ttk.Button(btnrow, text="Speichern", command=speichern).pack(side="left", padx=(0, 8))
+        ttk.Button(btnrow, text="Löschen", command=loeschen).pack(side="left")
+
+        # --- Bogenschützen Checkbox ---
+        ttk.Label(container, text="Work in Progress", font=("Segoe UI", 11, "bold")).grid(row=4, column=0, sticky="w", pady=(8, 0))
+
+        archer_var = tk.BooleanVar(value=self.archer_enabled)
+
+        def set_archer():
+            self.archer_enabled = bool(archer_var.get())
+            self.speichere_config()
+
+        ttk.Checkbutton(
+            container,
+            text="Bogenschützen aktivieren (Work in Progress)",
+            variable=archer_var,
+            command=set_archer
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+        ttk.Label(
+            container,
+            text="Hinweis: Diese Option ist noch nicht final und kann sich im Verhalten ändern.",
+            wraplength=490
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
+        ttk.Button(container, text="Schließen", command=popup.destroy).grid(row=7, column=2, sticky="e", pady=(18, 0))
+
+        container.columnconfigure(0, weight=1)
 
 
     def tab_kombi_hinzufuegen(self):
@@ -342,6 +540,20 @@ class StammGUI:
             angriffe = SosParser.parse(sos_text)
             eigene_dörfer = EigeneTruppenParser.parse(truppen_text)
 
+            supports_text = self.text_fields["Unterstützungen"].get("1.0", "end").strip()
+
+            try:
+                support_filter_seconds = int(self.support_filter_seconds_entry.get().strip())
+                if support_filter_seconds < 0:
+                    support_filter_seconds = 0
+            except Exception:
+                support_filter_seconds = 0
+
+            supports = SupportParser.parse(supports_text) if supports_text else []
+
+            # Filter anwenden
+            angriffe = self._filter_angriffe_mit_supports(angriffe, supports, support_filter_seconds)
+
             # Zeitfenster (immer als Liste; wenn leer -> keine Einschränkung)
             tz = pytz.timezone("Europe/Berlin")
 
@@ -390,6 +602,67 @@ class StammGUI:
 
         except Exception as e:
             print(f"Fehler bei der Tabberechnung: {e}")
+
+
+    def _filter_angriffe_mit_supports(self, angriffe, supports, nach_sekunden: int):
+            """
+            Entfernt Angriffe, wenn es eine Unterstützung mit gleicher Ziel-Koord gibt,
+            deren Ankunftszeit im Intervall [angriff_ankunft, angriff_ankunft + nach_sekunden] liegt.
+            """
+            if not angriffe or not supports:
+                return angriffe
+
+            if nach_sekunden < 0:
+                nach_sekunden = 0
+
+            # Map: ziel_koord -> sortierte Liste von Ankunftszeiten (datetime)
+            support_map = {}
+            for s in supports:
+                support_map.setdefault(s.ziel_koord, []).append(s.ankunftszeit)
+            for k in support_map:
+                support_map[k].sort()
+
+            delta = timedelta(seconds=nach_sekunden)
+            gefiltert = []
+
+            for a in angriffe:
+                lst = support_map.get(a.ziel_koord)
+                if not lst:
+                    gefiltert.append(a)
+                    continue
+
+                start = a.ankunftszeit
+                end = a.ankunftszeit + delta
+
+                i = bisect_left(lst, start)
+                if i < len(lst) and lst[i] <= end:
+                    # Support vorhanden -> Angriff rausfiltern
+                    continue
+
+                gefiltert.append(a)
+
+            return gefiltert        
+
+    def lade_config(self):
+        try:
+            if os.path.exists(self.CONFIG_DATEI):
+                with open(self.CONFIG_DATEI, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                self.dsu_api_key = (cfg.get("dsu_api_key") or "")
+                self.archer_enabled = bool(cfg.get("archer_enabled", False))
+        except Exception as e:
+            print(f"Fehler beim Laden der Config: {e}")
+
+    def speichere_config(self):
+        try:
+            cfg = {
+                "dsu_api_key": self.dsu_api_key,
+                "archer_enabled": self.archer_enabled,
+            }
+            with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Fehler beim Speichern der Config: {e}")
 
 
     def lade_geschwindigkeiten(self, welt_id):
