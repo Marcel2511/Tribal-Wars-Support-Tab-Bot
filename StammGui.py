@@ -25,6 +25,7 @@ from sos_parser import SosParser
 from tab_matching import TabMatching
 from support_parser import SupportParser
 from bisect import bisect_left
+from collections import Counter
 
 
 
@@ -392,6 +393,84 @@ class StammGUI:
 
         container.columnconfigure(0, weight=1)
 
+    def _angriff_key(self, a):
+        return (a.ziel_koord, a.ankunftszeit)
+
+    def _match_key(self, m):
+        return (m.ziel_koord, m.ankunftszeit)
+
+    def zeige_berechnung_report(self, original_angriffe, gefiltert_angriffe, verwendete_angriffe, matches, unmatched):
+        popup = tk.Toplevel(self.tk_root)
+        popup.title("Übersicht Tab-Berechnung")
+        popup.geometry("820x520")
+
+        container = ttk.Frame(popup, padding=12)
+        container.pack(fill="both", expand=True)
+        container.columnconfigure(0, weight=1)
+        container.rowconfigure(3, weight=1)
+        container.rowconfigure(6, weight=1)
+
+        # Summary
+        ttk.Label(container, text="Übersicht", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
+
+        summary = (
+            f"Angriffe gesamt: {len(original_angriffe)}\n"
+            f"Davon gefiltert (Support): {len(gefiltert_angriffe)}\n"
+            f"Für Matching verwendet: {len(verwendete_angriffe)}\n"
+            f"Tabs gefunden: {len(matches)}\n"
+            f"Kein Tab gefunden: {len(unmatched)}"
+        )
+        ttk.Label(container, text=summary).grid(row=1, column=0, sticky="w", pady=(6, 12))
+
+        # Gefiltert-Liste
+        ttk.Label(container, text="Gefilterte Angriffe (Support-Match)", font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w")
+
+        tree1 = ttk.Treeview(container, columns=("ziel", "ankunft", "einheit"), show="headings", height=6)
+        tree1.heading("ziel", text="Ziel")
+        tree1.heading("ankunft", text="Ankunft")
+        tree1.heading("einheit", text="Einheit")
+        tree1.column("ziel", width=120, anchor="w")
+        tree1.column("ankunft", width=180, anchor="w")
+        tree1.column("einheit", width=240, anchor="w")
+        tree1.grid(row=3, column=0, sticky="nsew")
+
+        for a in gefiltert_angriffe:
+            tree1.insert("", "end", values=(a.ziel_koord, a.ankunftszeit.strftime("%d.%m.%Y %H:%M:%S"), a.einheit))
+
+        # Unmatched-Liste
+        ttk.Label(container, text="Angriffe ohne gefundenen Tab", font=("Segoe UI", 10, "bold")).grid(row=5, column=0, sticky="w", pady=(12, 0))
+
+        tree2 = ttk.Treeview(container, columns=("ziel", "ankunft", "einheit"), show="headings", height=10)
+        tree2.heading("ziel", text="Ziel")
+        tree2.heading("ankunft", text="Ankunft")
+        tree2.heading("einheit", text="Einheit")
+        tree2.column("ziel", width=120, anchor="w")
+        tree2.column("ankunft", width=180, anchor="w")
+        tree2.column("einheit", width=240, anchor="w")
+        tree2.grid(row=6, column=0, sticky="nsew")
+
+        for a in unmatched:
+            tree2.insert("", "end", values=(a.ziel_koord, a.ankunftszeit.strftime("%d.%m.%Y %H:%M:%S"), a.einheit))
+
+        # Buttons
+        btns = ttk.Frame(container)
+        btns.grid(row=7, column=0, sticky="e", pady=(12, 0))
+
+        def kopiere_unmatched():
+            lines = []
+            for a in unmatched:
+                lines.append(f"{a.ziel_koord}\t{a.ankunftszeit.strftime('%d.%m.%Y %H:%M:%S')}\t{a.einheit}")
+            self._copy_to_clipboard("\n".join(lines))
+    
+        def kopiere_unmatched_sos():
+            sos_text = self._unmatched_als_sos_text(unmatched)
+            self._copy_to_clipboard(sos_text)
+
+        ttk.Button(btns, text="Unmatched als SOS kopieren", command=kopiere_unmatched_sos).pack(side="left", padx=(0, 8))
+        ttk.Button(btns, text="Unmatched kopieren", command=kopiere_unmatched).pack(side="left", padx=(0, 8))
+
+        ttk.Button(btns, text="Schließen", command=popup.destroy).pack(side="left")
+        
 
     def tab_kombi_hinzufuegen(self):
         kombi = {}
@@ -537,22 +616,21 @@ class StammGUI:
             sos_text = self.text_fields["SOS Anfrage"].get("1.0", "end").strip()
             truppen_text = self.text_fields["Eigene Truppen"].get("1.0", "end").strip()
 
-            angriffe = SosParser.parse(sos_text)
+            original_angriffe = SosParser.parse(sos_text)
+            angriffe = original_angriffe
             eigene_dörfer = EigeneTruppenParser.parse(truppen_text)
 
             supports_text = self.text_fields["Unterstützungen"].get("1.0", "end").strip()
+            supports = SupportParser.parse(supports_text) if supports_text else []
 
             try:
                 support_filter_seconds = int(self.support_filter_seconds_entry.get().strip())
-                if support_filter_seconds < 0:
-                    support_filter_seconds = 0
             except Exception:
                 support_filter_seconds = 0
 
-            supports = SupportParser.parse(supports_text) if supports_text else []
-
-            # Filter anwenden
-            angriffe = self._filter_angriffe_mit_supports(angriffe, supports, support_filter_seconds)
+            angriffe, gefiltert_angriffe = self._filter_angriffe_mit_supports(
+                angriffe, supports, support_filter_seconds
+            )
 
             # Zeitfenster (immer als Liste; wenn leer -> keine Einschränkung)
             tz = pytz.timezone("Europe/Berlin")
@@ -594,7 +672,29 @@ class StammGUI:
                 boost_level=self.boost_level
             )
 
+            
+            angriff_counter = Counter(self._angriff_key(a) for a in angriffe)
+            match_counter = Counter(self._match_key(m) for m in self.matches)
+
+            unmatched = []
+            rest = angriff_counter - match_counter
+
+            if rest:
+                for a in angriffe:
+                    k = self._angriff_key(a)
+                    if rest.get(k, 0) > 0:
+                        unmatched.append(a)
+                        rest[k] -= 1
+
             print(f"{len(self.matches)} Tabs gefunden und bereit zum Export")
+
+            self.zeige_berechnung_report(
+                original_angriffe=original_angriffe,
+                gefiltert_angriffe=gefiltert_angriffe,
+                verwendete_angriffe=angriffe,
+                matches=self.matches,
+                unmatched=unmatched
+            )
 
             if self.export_button:
                 self.export_button.config(state="normal" if self.matches else "disabled")
@@ -604,44 +704,80 @@ class StammGUI:
             print(f"Fehler bei der Tabberechnung: {e}")
 
 
-    def _filter_angriffe_mit_supports(self, angriffe, supports, nach_sekunden: int):
-            """
-            Entfernt Angriffe, wenn es eine Unterstützung mit gleicher Ziel-Koord gibt,
-            deren Ankunftszeit im Intervall [angriff_ankunft, angriff_ankunft + nach_sekunden] liegt.
-            """
-            if not angriffe or not supports:
-                return angriffe
+    def _unmatched_als_sos_text(self, unmatched):
+        """
+        Rekonstruiert einen SOS-Text, der von SosParser.parse wieder verstanden wird.
+        Hinweis: Herkunfts-Koord in der Angriffszeile ist Dummy, da SosParser sie ignoriert.
+        """
+        if not unmatched:
+            return ""
 
-            if nach_sekunden < 0:
-                nach_sekunden = 0
+        # Gruppieren nach Ziel-Koord
+        by_ziel = {}
+        for a in unmatched:
+            by_ziel.setdefault(a.ziel_koord, []).append(a)
 
-            # Map: ziel_koord -> sortierte Liste von Ankunftszeiten (datetime)
-            support_map = {}
-            for s in supports:
-                support_map.setdefault(s.ziel_koord, []).append(s.ankunftszeit)
-            for k in support_map:
-                support_map[k].sort()
-
-            delta = timedelta(seconds=nach_sekunden)
-            gefiltert = []
-
+        # Sortiert: Ziele alphabetisch, Angriffe chronologisch
+        lines = []
+        for ziel in sorted(by_ziel.keys()):
+            lines.append(f"[b]Dorf:[/b] [coord]{ziel}[/coord]")
+            angriffe = sorted(by_ziel[ziel], key=lambda x: x.ankunftszeit)
             for a in angriffe:
-                lst = support_map.get(a.ziel_koord)
-                if not lst:
-                    gefiltert.append(a)
-                    continue
+                dt = a.ankunftszeit
+                # SosParser erwartet: DD.MM.YY HH:MM:SS
+                dt_s = dt.strftime("%d.%m.%y %H:%M:%S")
 
-                start = a.ankunftszeit
-                end = a.ankunftszeit + delta
+                # Dummy-Koord, wird von SosParser nicht verwendet
+                dummy = "000|000"
 
-                i = bisect_left(lst, start)
-                if i < len(lst) and lst[i] <= end:
-                    # Support vorhanden -> Angriff rausfiltern
-                    continue
+                # einheit ist Freitext; so wie im SOS-Parser extrahiert, wieder einfügen
+                einheit_text = (a.einheit or "").strip()
 
-                gefiltert.append(a)
+                lines.append(
+                    f"[command]attack[/command] {einheit_text} [coord]{dummy}[/coord] --> Ankunftszeit: {dt_s}"
+                )
 
-            return gefiltert        
+            lines.append("")  # Leerzeile zwischen Zielen
+
+        return "\n".join(lines).strip()        
+
+
+    def _filter_angriffe_mit_supports(self, angriffe, supports, nach_sekunden: int):
+        if not angriffe or not supports:
+            return angriffe, []
+
+        if nach_sekunden < 0:
+            nach_sekunden = 0
+
+        support_map = {}
+        for s in supports:
+            support_map.setdefault(s.ziel_koord, []).append(s.ankunftszeit)
+        for k in support_map:
+            support_map[k].sort()
+
+        delta = timedelta(seconds=nach_sekunden)
+
+        kept = []
+        removed = []
+
+        for a in angriffe:
+            lst = support_map.get(a.ziel_koord)
+            if not lst:
+                kept.append(a)
+                continue
+
+            start = a.ankunftszeit
+            end = a.ankunftszeit + delta
+
+            i = bisect_left(lst, start)
+            if i < len(lst) and lst[i] <= end:
+                removed.append(a)   # <-- gefiltert
+                continue
+
+            kept.append(a)
+
+        return kept, removed
+   
 
     def lade_config(self):
         try:

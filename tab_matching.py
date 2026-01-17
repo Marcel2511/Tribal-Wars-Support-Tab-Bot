@@ -126,7 +126,6 @@ class TabMatching:
 
                 matches.append(bester_match)
 
-        TabMatching.zeige_popup(len(angriffe), len(matches))
         return matches
 
 
@@ -146,20 +145,6 @@ class TabMatching:
             if von <= ts <= bis:
                 return True
         return False
-
-    @staticmethod
-    def zeige_popup(anz_angriffe: int, anz_tabs: int):
-        popup = tk.Toplevel()
-        popup.title("Tabberechnung abgeschlossen")
-        popup.geometry("280x120")
-        popup.resizable(False, False)
-
-        text = f"{anz_angriffe} Angriffe verarbeitet\n{anz_tabs} Tabs gefunden"
-        label = ttk.Label(popup, text=text, font=("Segoe UI", 11))
-        label.pack(pady=20)
-
-        button = ttk.Button(popup, text="OK", command=popup.destroy)
-        button.pack(pady=(0, 10))
 
     @staticmethod
     def lade_koord_to_id_map(welt_id: str) -> Dict[str, int]:
