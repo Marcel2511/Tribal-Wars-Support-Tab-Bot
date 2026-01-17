@@ -229,7 +229,7 @@ class StammGUI:
         version = "V3.0"
         discord_handle = "marcel6301"
         github_repo = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
-        anleitung_url = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
+        anleitung_url = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/wiki/Anleitung-Tabtool"
 
         # === Überschrift ===
         ttk.Label(
