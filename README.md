@@ -55,10 +55,11 @@ python StammGui.py
 1. **Welt-ID eingeben**: z.B. "221" für de221.die-staemme.de
 2. **SOS-Daten einfügen**: Angriffsdaten aus dem Spiel kopieren
 3. **Truppen-Übersicht einfügen**: Eigene Truppen aus dem Spiel kopieren (Strg A + Strg C in der Truppenübersicht)
-4. **Truppen-Kombinationen konfigurieren**: Gewünschte Tab-Größen festlegen
-5. **Zeitfenster setzen**: Beliebig viele Von/Bis-Zeitfenster setzen um Abschickzeitpunkte festzulegen
-6. **Tabs berechnen**: Optimale Zuordnung ermitteln
-7. **Export**: Ergebnis für DS Ultimate exportieren
+4. **Unterstützungen einfügen**: Eingehende Unterstützungen aus dem Spiel kopieren (Srag A + Strg C io der Unterstützungsübersicht)
+5. **Truppen-Kombinationen konfigurieren**: Gewünschte Tab-Größen festlegen
+6. **Zeitfenster setzen**: Beliebig viele Von/Bis-Zeitfenster setzen um Abschickzeitpunkte festzulegen
+7. **Tabs berechnen**: Optimale Zuordnung ermitteln
+8. **Export**: Ergebnis für DS Ultimate exportieren
 
 ### GUI-Elemente
 
@@ -66,9 +67,10 @@ python StammGui.py
 - **SOS-Anfrage**: Textfeld für eingehende Angriffe
 - **Eigene Truppen**: Textfeld für verfügbare Einheiten
 - **Einheiten-Auswahl**: Checkboxen mit Mengenangaben
-- **Zeitfenster**: Von/Bis-Datum für Tab-Timing
+- **Zeitfenster**: Von/Bis-Datum für Tab-Timing und Aushahl mehrere Zeitfenster
 - **Berechnen**: Startet die Tab-Berechnung
-- **Export**: Speichert Ergebnis als Textdatei
+- **Menü**: Eingabe von DSU API-KEY
+- **Export**: Öffnet ein Feld
 
 ## 📁 Projektstruktur
 
@@ -80,6 +82,7 @@ Tribal-Wars-Support-Tab-Bot/
 ├── tab_matching.py             # Kern-Logik für Tab-Matching
 ├── distanz_rechner.py          # Entfernungsberechnung
 ├── einheiten.py                # Einheiten-Definitionen
+├── support-parser.py           # Parser für eingehende Unterstützungen
 ├── tabverlauf.json             # Gespeicherte Truppen-Kombinationen
 ├── support.ico                 # Anwendungs-Icon
 ├── images/                     # Einheiten-Icons
