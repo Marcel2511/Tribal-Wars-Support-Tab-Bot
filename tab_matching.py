@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from tkinter import ttk
 from typing import Dict, List, Optional, Sequence, Tuple
+import requests
 
 import pytz
 import requests
@@ -145,6 +146,126 @@ class TabMatching:
             if von <= ts <= bis:
                 return True
         return False
+    
+    @staticmethod
+    def send_attackplanner_to_dsu(
+        matches: list,
+        world: str,
+        api_key: str,
+        server: str = "de",
+        title: str = "Support Tabs",
+        sitterMode: bool = False,
+        tribe_skill: float = 0.0,
+        support_boost: float = 0.0,
+        ms: int = 500,
+    ) -> dict:
+        """
+        Sendet Matches an DS-Ultimate AttackPlanner API.
+        Rückgabe: JSON dict (enthält u.a. 'edit' bei Erfolg)
+        """
+        url = "https://ds-ultimate.de/toolAPI/attackPlanner/create"
+
+        if not api_key:
+            raise ValueError("DSU API_KEY fehlt.")
+
+        # DE->DS Unit Keys
+        ds_names = {
+            "Speerträger": "spear",
+            "Schwertkämpfer": "sword",
+            "Axtkämpfer": "axe",
+            "Späher": "spy",
+            "Leichte Kavallerie": "light",
+            "Schwere Kavallerie": "heavy",
+            "Rammböcke": "ram",
+            "Katapulte": "catapult",
+            # Bogis absichtlich nicht (WIP)
+        }
+
+        # Koord->ID map (wie bisher)
+        koord_to_id = TabMatching.lade_koord_to_id_map(str(world))
+
+        # Unit keys die wir immer mitsenden (archer/marcher NICHT mitsenden)
+        unit_keys = [
+            "spear", "sword", "axe", "spy",
+            "light", "heavy", "ram", "catapult",
+            "knight", "snob",
+        ]
+
+        unit_id = {
+            "spear": 0,
+            "sword": 1,
+            "axe": 2,
+            "archer": 3,
+            "spy": 4,
+            "light": 5,
+            "marcher": 6,
+            "heavy": 7,
+            "ram": 8,
+            "catapult": 9,
+            "knight": 10,
+            "snob": 11,
+        }
+
+        # URL-encoded payload (items[0][...])
+        payload = {
+            "world": str(world),
+            "server": str(server),
+            "title": str(title),
+            "sitterMode": "true" if sitterMode else "false",
+            "API_KEY": str(api_key),
+        }
+
+        for i, match in enumerate(matches):
+            start_id = koord_to_id.get(match.herkunft.koordinaten)
+            ziel_id = koord_to_id.get(match.ziel_koord)
+            if not start_id or not ziel_id:
+                # skip, wie bisher beim txt export
+                continue
+
+            # slowest_unit: aus einheit_kuerzel (DE) -> DS key
+            slowest_unit_key = ds_names.get(match.einheit_kuerzel) or "spear"
+            slowest_unit_val = unit_id.get(slowest_unit_key, 0)  # default spear
+
+
+            base = f"items[{i}]"
+
+            payload[f"{base}[source]"] = str(start_id)
+            payload[f"{base}[destination]"] = str(ziel_id)
+            payload[f"{base}[slowest_unit]"] = str(int(slowest_unit_val))
+            payload[f"{base}[arrival_time]"] = str(int(match.ankunftszeit.timestamp()))  # Sekunden
+            payload[f"{base}[type]"] = "0"
+            payload[f"{base}[support_boost]"] = str(support_boost)
+            payload[f"{base}[tribe_skill]"] = str(tribe_skill)
+            payload[f"{base}[ms]"] = str(int(ms))
+
+            # Einheiten: immer alle unit_keys senden, fehlende = 0
+            # match.einheiten sind DE-Namen -> DS keys
+            einheiten_ds = {}
+            for name_de, anzahl in (match.einheiten or {}).items():
+                k = ds_names.get(name_de)
+                if k:
+                    einheiten_ds[k] = int(anzahl)
+
+            for k in unit_keys:
+                payload[f"{base}[{k}]"] = str(einheiten_ds.get(k, 0))
+
+        headers = {
+            "Accept": "application/json",
+        }
+
+        resp = requests.post(url, data=payload, headers=headers, timeout=30)
+
+        # DSU gibt ohne Accept ggf. HTML zurück; wir erzwingen Accept. Trotzdem robust:
+        try:
+            data = resp.json()
+        except Exception:
+            text_snippet = (resp.text or "")[:500]
+            raise RuntimeError(f"DSU Antwort ist kein JSON (HTTP {resp.status_code}): {text_snippet}")
+
+        if resp.status_code >= 400:
+            raise RuntimeError(f"DSU Fehler (HTTP {resp.status_code}): {data}")
+
+        return data
 
     @staticmethod
     def lade_koord_to_id_map(welt_id: str) -> Dict[str, int]:

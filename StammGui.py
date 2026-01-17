@@ -203,7 +203,7 @@ class StammGUI:
         ttk.Button(right_btns, text="Menü", command=self.zeige_menue_fenster).pack(
             side="left", padx=(0, 8), ipadx=20, ipady=6
         )
-        ttk.Button(right_btns, text="Kontakt", command=self.zeige_kontakt_fenster).pack(
+        ttk.Button(right_btns, text="Kontakt/Hilfe", command=self.zeige_kontakt_fenster).pack(
             side="left", padx=(0, 12), ipadx=20, ipady=6
         )
 
@@ -218,7 +218,7 @@ class StammGUI:
     def zeige_kontakt_fenster(self):
         popup = tk.Toplevel(self.tk_root)
         popup.title("Kontakt")
-        popup.geometry("480x260")
+        popup.geometry("480x300")
         popup.resizable(False, False)
 
         container = ttk.Frame(popup, padding=12)
@@ -227,8 +227,9 @@ class StammGUI:
         # === Daten ===
         autor = "Marcel Wollbaum"
         version = "V3.0"
-        discord_handle = "DEIN_DISCORD_HANDLE"  # <-- hier eintragen
+        discord_handle = "marcel6301"
         github_repo = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
+        anleitung_url = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
 
         # === Überschrift ===
         ttk.Label(
@@ -245,26 +246,33 @@ class StammGUI:
         )
 
         # === Discord ===
-        ttk.Label(container, text="Discord:").grid(row=3, column=0, sticky="w")
+        ttk.Label(container, text="Discord:").grid(row=4, column=0, sticky="w")
         ttk.Label(container, text=discord_handle).grid(
-            row=3, column=1, sticky="w", padx=(6, 6)
+            row=4, column=1, sticky="w", padx=(6, 6)
         )
         ttk.Button(
             container,
             text="Kopieren",
             command=lambda: self._copy_to_clipboard(discord_handle)
-        ).grid(row=3, column=2, sticky="e")
+        ).grid(row=4, column=2, sticky="e")
+
+        # Hinweis für Support / Feature Requests
+        ttk.Label(
+            container,
+            text="Bei Fragen oder Feature-Requests bitte über Discord melden.",
+            wraplength=420
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 6))
 
         # === GitHub ===
         ttk.Label(container, text="GitHub:").grid(
-            row=4, column=0, sticky="w", pady=(10, 0)
+            row=5, column=0, sticky="w", pady=(10, 0)
         )
         ttk.Label(container, text=github_repo).grid(
-            row=4, column=1, sticky="w", padx=(6, 6), pady=(10, 0)
+            row=5, column=1, sticky="w", padx=(6, 6), pady=(10, 0)
         )
 
         gh_btns = ttk.Frame(container)
-        gh_btns.grid(row=4, column=2, sticky="e", pady=(10, 0))
+        gh_btns.grid(row=5, column=2, sticky="e", pady=(10, 0))
         ttk.Button(
             gh_btns,
             text="Kopieren",
@@ -276,12 +284,22 @@ class StammGUI:
             command=lambda: self._open_url(github_repo)
         ).pack(side="left")
 
+        # === Anleitung ===
+        ttk.Label(container, text="Anleitung:").grid(
+            row=6, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Button(
+            container,
+            text="Öffnen",
+            command=lambda: self._open_url(anleitung_url)
+        ).grid(row=6, column=2, sticky="e", pady=(8, 0))
+
         # === Schließen ===
         ttk.Button(
             container,
             text="Schließen",
             command=popup.destroy
-        ).grid(row=6, column=2, sticky="e", pady=(20, 0))
+        ).grid(row=8, column=2, sticky="e", pady=(20, 0))
 
         container.columnconfigure(1, weight=1)
 
@@ -334,7 +352,7 @@ class StammGUI:
         ttk.Label(container, text="DSU-API-Key", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
         ttk.Label(
             container,
-            text="Hinweis: Den DSU-API-Key bekommst du auf dem Discord (DEIN_DISCORD_HANDLE) oder direkt bei mir via Discord.",
+            text="Hinweis: Den DSU-API-Key bekommst du auf dem Discord DSUltiamte oder direkt bei mir via Discord (marcel6301).",
             wraplength=490
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 10))
 
@@ -385,7 +403,7 @@ class StammGUI:
 
         ttk.Label(
             container,
-            text="Hinweis: Diese Option ist noch nicht final und kann sich im Verhalten ändern.",
+            text="Hinweis: Diese Option ist noch nicht final und kann sich im Verhalten ändern, stand jetzt tut sie gar nichts und Bogenschützen werden nicht unterstützt",
             wraplength=490
         ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
@@ -905,10 +923,40 @@ class StammGUI:
         ttk.Button(container, text="Übernehmen", command=übernehmen).pack(pady=(5, 10))
 
     def exportiere(self):
+        # kleines Auswahlfenster: TXT oder DSU API
+        popup = tk.Toplevel(self.tk_root)
+        popup.title("Export")
+        popup.geometry("360x160")
+        popup.resizable(False, False)
+
+        container = ttk.Frame(popup, padding=12)
+        container.pack(fill="both", expand=True)
+
+        ttk.Label(container, text="Export auswählen:", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
+
+        def export_txt():
+            popup.destroy()
+            self._export_txt()
+
+        def export_dsu():
+            popup.destroy()
+            self._export_dsu_api()
+
+        btns = ttk.Frame(container)
+        btns.pack(fill="x", pady=(10, 0))
+
+        ttk.Button(btns, text="Als TXT speichern", command=export_txt).pack(side="left", padx=(0, 10), ipadx=10, ipady=6)
+        ttk.Button(btns, text="An DS-Ultimate senden", command=export_dsu).pack(side="left", ipadx=10, ipady=6)
+
+        ttk.Button(container, text="Abbrechen", command=popup.destroy).pack(anchor="e", pady=(14, 0))
+
+    def _export_txt(self):
         try:
-            export_text = TabMatching.export_dsultimate(self.matches, self.welt_id_entry.get().strip())
+            export_text = TabMatching.export_dsultimate(self.matches, self.welt_id)
             pfad = filedialog.asksaveasfilename(
-                defaultextension=".txt", filetypes=[("Textdateien", "*.txt")], title="Speichern unter"
+                defaultextension=".txt",
+                filetypes=[("Textdateien", "*.txt")],
+                title="Speichern unter"
             )
             if pfad:
                 with open(pfad, "w", encoding="utf-8") as f:
@@ -916,6 +964,46 @@ class StammGUI:
                 print(f"Export erfolgreich: {pfad}")
         except Exception as e:
             print(f"Export fehlgeschlagen: {e}")
+            messagebox.showerror("Export fehlgeschlagen", str(e))
+
+    def _export_dsu_api(self):
+        try:
+            if not self.dsu_api_key:
+                messagebox.showerror("DSU Export", "Kein DSU-API-Key gesetzt (Menü -> DSU-API-Key).")
+                return
+
+            # tribe_skill aus Boost-Feld: 10 -> 0.1, 15 -> 0.15
+            try:
+                boost_val = int(self.boost_entry.get().strip())
+            except Exception:
+                boost_val = 0
+            tribe_skill = boost_val / 100.0
+
+            result = TabMatching.send_attackplanner_to_dsu(
+                matches=self.matches,
+                world=str(self.welt_id),
+                api_key=self.dsu_api_key,
+                server="de",
+                title="Support Tabs",
+                sitterMode=False,
+                tribe_skill=tribe_skill,
+                support_boost=0.0,
+                ms=500,
+            )
+
+            edit_link = result.get("edit", "")
+            if edit_link:
+                self._copy_to_clipboard(edit_link)
+                messagebox.showinfo("DSU Export", "kopiert")
+                print("[DSU] OK, edit link kopiert.")
+            else:
+                # trotzdem Erfolg möglich, aber ohne edit feld
+                messagebox.showinfo("DSU Export", "OK (kein edit link in Antwort)")
+                print(f"[DSU] OK: {result}")
+
+        except Exception as e:
+            print(f"[DSU] Fehler: {e}")
+            messagebox.showerror("DSU Export fehlgeschlagen", str(e))
 
 # GUI starten
 if __name__ == "__main__":
