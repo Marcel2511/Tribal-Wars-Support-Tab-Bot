@@ -127,6 +127,11 @@ class StammGUI:
         self.welt_id_entry = ttk.Entry(self.tk_root, width=5)
         self.welt_id_entry.grid(row=0, column=3, sticky="nw", padx=5, pady=(2, 2))
 
+        # Speichere Welt-ID bei jeder Änderung
+        self.welt_id_entry.bind("<FocusOut>", self._on_welt_id_change)
+        self.welt_id_entry.bind("<Return>", self._on_welt_id_change)
+
+
         ttk.Label(self.tk_root, text="LZ-Multiplikator(%):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.boost_entry = ttk.Entry(self.tk_root, width=5)
         self.boost_entry.insert(0, "0")
@@ -327,6 +332,13 @@ class StammGUI:
         self.export_button.pack(side="left", ipadx=20, ipady=6)
 
 
+    def _on_welt_id_change(self, event=None):
+        """Speichert die Welt-ID wenn sie geändert wird"""
+        welt_id = self.welt_id_entry.get().strip()
+        if welt_id.isdigit():
+            self.welt_id = welt_id
+            self.speichere_config()
+
     def aktualisiere_parse_ergebnis(self, label):
         """Zeigt sofort das Parse-Ergebnis an"""
         text_widget = self.text_fields[label]
@@ -488,6 +500,12 @@ class StammGUI:
                     cfg = json.load(f)
                 self.dsu_api_key = (cfg.get("dsu_api_key") or "")
                 self.archer_enabled = bool(cfg.get("archer_enabled", False))
+                # Welt-ID laden
+                saved_welt_id = cfg.get("welt_id", "")
+                if saved_welt_id:
+                    self.welt_id = saved_welt_id
+                    self.welt_id_entry.delete(0, tk.END)
+                    self.welt_id_entry.insert(0, saved_welt_id)
         except Exception as e:
             print(f"Fehler beim Laden der Config: {e}")
 
@@ -496,6 +514,7 @@ class StammGUI:
             cfg = {
                 "dsu_api_key": self.dsu_api_key,
                 "archer_enabled": self.archer_enabled,
+                "welt_id": self.welt_id,
             }
             with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
