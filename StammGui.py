@@ -189,8 +189,6 @@ class StammGUI:
         # Konfiguriere Spalten für volle Breite
         for i in range(6):
             auto_frame.columnconfigure(i, weight=1)
-
-        ttk.Label(auto_frame, text="Geschwindigkeits-Einheiten automatisch hinzufügen:", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, columnspan=6, sticky="w", padx=5, pady=(5, 5))
         
         # Individuelle Checkboxen für jede Geschwindigkeits-Einheit
         self.auto_speed_units = {}
