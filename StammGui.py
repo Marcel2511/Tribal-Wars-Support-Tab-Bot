@@ -81,6 +81,11 @@ class StammGUI:
             # Event-Handler für Texteingabe
             text.bind("<KeyRelease>", lambda e, lbl=label: self.aktualisiere_parse_ergebnis(lbl))
             text.bind("<<Paste>>", lambda e, lbl=label: self.tk_root.after(100, lambda: self.aktualisiere_parse_ergebnis(lbl)))
+            
+            # Bei "Eigene Truppen" auch Tab-Anzeige aktualisieren
+            if label == "Eigene Truppen":
+                text.bind("<KeyRelease>", lambda e, lbl=label: self._on_truppen_change(lbl), add="+")
+                text.bind("<<Paste>>", lambda e, lbl=label: self.tk_root.after(100, lambda: self._on_truppen_change(lbl)), add="+")
 
         ttk.Label(self.tk_root, text="Welt-ID (z.B. 236):").grid(row=0, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.welt_id_entry = ttk.Entry(self.tk_root, width=5)
@@ -270,6 +275,28 @@ class StammGUI:
                 
         except Exception as e:
             result_label.config(text=f"⚠ Fehler beim Parsen: {str(e)}", foreground="red")
+
+
+    def _on_truppen_change(self, label):
+        """Wird aufgerufen wenn sich die Eigene Truppen ändern"""
+        self.aktualisiere_parse_ergebnis(label)
+        self._aktualisiere_tab_anzeige()
+
+    def _aktualisiere_tab_anzeige(self):
+        """Aktualisiert die Anzeige der möglichen Tabs für alle Kombinationen"""
+        if not self.tab_config_display:
+            return
+        
+        # Alle Einträge neu aufbauen
+        self.tab_config_display.delete(0, tk.END)
+        for kombi in self.tabgroessen_liste:
+            beschreibung = [f"{menge}x {einheit}" for einheit, menge in kombi.items()]
+            
+            # Berechne mögliche Tabs
+            anzahl_tabs = self._berechne_moegliche_tabs(kombi)
+            tabs_info = f" → {anzahl_tabs} Tab(s) möglich" if anzahl_tabs is not None else ""
+            
+            self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
 
 
     def zeige_kontakt_fenster(self):
@@ -560,9 +587,44 @@ class StammGUI:
                 except ValueError:
                     continue
         if kombi:
+            # Berechne wie viele Tabs möglich sind
+            anzahl_tabs = self._berechne_moegliche_tabs(kombi)
+            tabs_info = f" → {anzahl_tabs} Tab(s) möglich" if anzahl_tabs is not None else ""
+            
             self.tabgroessen_liste.append(kombi)
-            self.tab_config_display.insert(tk.END, ", ".join(beschreibung))
+            self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
             self.speichere_tabverlauf()
+
+    def _berechne_moegliche_tabs(self, kombi):
+        """Berechnet wie viele Tabs mit dieser Kombination möglich sind"""
+        try:
+            truppen_text = self.text_fields["Eigene Truppen"].get("1.0", "end").strip()
+            if not truppen_text:
+                return None
+            
+            eigene_dörfer = EigeneTruppenParser.parse(truppen_text)
+            if not eigene_dörfer:
+                return None
+            
+            # Gesamte verfügbare Truppen berechnen
+            verfuegbar = {}
+            for dorf in eigene_dörfer:
+                for einheit, menge in dorf.truppen.items():
+                    verfuegbar[einheit] = verfuegbar.get(einheit, 0) + menge
+            
+            # Für jede Einheit in der Kombination prüfen, wie oft sie gesendet werden kann
+            max_tabs = float('inf')
+            for einheit, benötigt in kombi.items():
+                vorhanden = verfuegbar.get(einheit, 0)
+                if benötigt > 0:
+                    tabs_für_einheit = vorhanden // benötigt
+                    max_tabs = min(max_tabs, tabs_für_einheit)
+            
+            return int(max_tabs) if max_tabs != float('inf') else 0
+        except Exception as e:
+            print(f"Fehler beim Berechnen der möglichen Tabs: {e}")
+            return None
+
 
     def tab_kombi_loeschen(self):
         auswahl = self.tab_config_display.curselection()
@@ -579,7 +641,12 @@ class StammGUI:
                     for kombi in daten:
                         self.tabgroessen_liste.append(kombi)
                         beschreibung = [f"{menge}x {einheit}" for einheit, menge in kombi.items()]
-                        self.tab_config_display.insert(tk.END, ", ".join(beschreibung))
+                        
+                        # Berechne mögliche Tabs auch beim Laden
+                        anzahl_tabs = self._berechne_moegliche_tabs(kombi)
+                        tabs_info = f" → {anzahl_tabs} Tab(s) möglich" if anzahl_tabs is not None else ""
+                        
+                        self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
         except Exception as e:
             print(f"Fehler beim Laden des Verlaufs: {e}")
 
