@@ -1029,26 +1029,6 @@ class StammGUI:
         return kept, removed
    
 
-    def lade_config(self):
-        try:
-            if os.path.exists(self.CONFIG_DATEI):
-                with open(self.CONFIG_DATEI, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                self.dsu_api_key = (cfg.get("dsu_api_key") or "")
-                self.archer_enabled = bool(cfg.get("archer_enabled", False))
-        except Exception as e:
-            print(f"Fehler beim Laden der Config: {e}")
-
-    def speichere_config(self):
-        try:
-            cfg = {
-                "dsu_api_key": self.dsu_api_key,
-                "archer_enabled": self.archer_enabled,
-            }
-            with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Fehler beim Speichern der Config: {e}")
 
 
     def lade_geschwindigkeiten(self, welt_id):
