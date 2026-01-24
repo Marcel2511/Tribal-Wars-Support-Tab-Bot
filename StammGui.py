@@ -204,7 +204,7 @@ class StammGUI:
             ("Axtkämpfer", "unit_axe.webp"),
             ("Schwere Kavallerie", "unit_heavy.webp"),
             ("Katapulte", "unit_catapult.webp"),
-            ("rammboecke", "unit_ram.webp")
+            ("Rammböcke", "unit_ram.webp")
         ]
         
         for idx, (name, img_file) in enumerate(speed_units):
