@@ -198,5 +198,5 @@ class TestAliasNormalization:
         assert result == 10.0
         
         # "Rammböcke" has ö
-        result = get_laufzeit("rammbocke")
+        result = get_laufzeit("rammböcke")
         assert result == 30.0

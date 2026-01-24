@@ -13,6 +13,10 @@ import requests
 from distanz_rechner import DistanzRechner
 from einheiten import get_laufzeit
 
+@dataclass
+class Angriff:
+    ziel_koord: str
+    ankunftszeit: datetime
 
 @dataclass
 class TabMatch:
@@ -26,13 +30,13 @@ class TabMatch:
 class TabMatching:
     @staticmethod
     def finde_tabs(
-        angriffe: List[object],
+        angriffe: List[Angriff],
         eigene_dörfer: List[object],
         tabgroessen_liste: List[Dict[str, int]],
         welt_speed: float = 1.0,
         einheiten_speed: float = 1.0,
         zeitfenster_liste=None,
-        boost_level: int = 1,
+        boost_level: float = 1.0,
         auto_speed_units: Dict[str, bool] | None = None,
         auto_scouts_enabled: bool = True,
         auto_scouts_count: int = 5
