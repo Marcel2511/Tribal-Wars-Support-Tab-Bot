@@ -60,6 +60,7 @@ class StammGUI:
         self.zeitfenster_liste = []
         self.zeitfenster_tree = None 
         self.tab_config_display: tk.Listbox | None = None
+        self.support_filter_enabled = True
 
         self.build_gui()
         self.lade_tabverlauf()
@@ -141,6 +142,15 @@ class StammGUI:
         self.support_filter_seconds_entry = ttk.Entry(self.tk_root, width=5)
         self.support_filter_seconds_entry.insert(0, "0")
         self.support_filter_seconds_entry.grid(row=4, column=3, sticky="nw", padx=5, pady=(2, 2))
+
+        # Support-Filter aktivieren/deaktivieren
+        self.support_filter_var = tk.BooleanVar(value=self.support_filter_enabled)
+        ttk.Checkbutton(
+            self.tk_root, 
+            text="Support-Filter aktivieren", 
+            variable=self.support_filter_var,
+            command=self._on_support_filter_change
+        ).grid(row=5, column=2, columnspan=2, sticky="w", padx=5, pady=(0, 2))
 
         self.einheiten = {
             "Speerträger": "unit_spear.webp",
@@ -339,6 +349,11 @@ class StammGUI:
             self.welt_id = welt_id
             self.speichere_config()
 
+    def _on_support_filter_change(self):
+        """Speichert Support-Filter Einstellung"""
+        self.support_filter_enabled = self.support_filter_var.get()
+        self.speichere_config()
+
     def aktualisiere_parse_ergebnis(self, label):
         """Zeigt sofort das Parse-Ergebnis an"""
         text_widget = self.text_fields[label]
@@ -500,6 +515,12 @@ class StammGUI:
                     cfg = json.load(f)
                 self.dsu_api_key = (cfg.get("dsu_api_key") or "")
                 self.archer_enabled = bool(cfg.get("archer_enabled", False))
+                self.support_filter_enabled = bool(cfg.get("support_filter_enabled", True))
+                
+                # Support-Filter Checkbox aktualisieren
+                if hasattr(self, 'support_filter_var'):
+                    self.support_filter_var.set(self.support_filter_enabled)
+                
                 # Welt-ID laden
                 saved_welt_id = cfg.get("welt_id", "")
                 if saved_welt_id:
@@ -515,6 +536,7 @@ class StammGUI:
                 "dsu_api_key": self.dsu_api_key,
                 "archer_enabled": self.archer_enabled,
                 "welt_id": self.welt_id,
+                "support_filter_enabled": self.support_filter_enabled,
             }
             with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
@@ -922,9 +944,13 @@ class StammGUI:
             except Exception:
                 support_filter_seconds = 0
 
-            angriffe, gefiltert_angriffe = self._filter_angriffe_mit_supports(
-                angriffe, supports, support_filter_seconds
-            )
+            # Support-Filter nur anwenden wenn aktiviert
+            if self.support_filter_enabled and supports:
+                angriffe, gefiltert_angriffe = self._filter_angriffe_mit_supports(
+                    angriffe, supports, support_filter_seconds
+                )
+            else:
+                gefiltert_angriffe = []
 
             # Zeitfenster (immer als Liste; wenn leer -> keine Einschränkung)
             tz = pytz.timezone("Europe/Berlin")
