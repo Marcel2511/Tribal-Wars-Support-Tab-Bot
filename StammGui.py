@@ -193,8 +193,8 @@ class StammGUI:
         # Individuelle Checkboxen für jede Geschwindigkeits-Einheit
         self.auto_speed_units = {}
         speed_units = [
-            ("Speerträger", "unit_spear.webp"),            
-            ("Schwertkämpfer", "unit_sword.webp"),            
+            ("Speerträger", "unit_spear.webp"),
+            ("Schwertkämpfer", "unit_sword.webp"),
             ("Axtkämpfer", "unit_axe.webp"),
             ("Schwere Kavallerie", "unit_heavy.webp"),
             ("Katapulte", "unit_catapult.webp"),
