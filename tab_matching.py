@@ -1,12 +1,10 @@
 import base64
 import copy
 import gzip
-import tkinter as tk
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import BytesIO
-from tkinter import ttk
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List
 import requests
 
 import pytz
@@ -35,7 +33,7 @@ class TabMatching:
         einheiten_speed: float = 1.0,
         zeitfenster_liste=None,
         boost_level: int = 1,
-        auto_speed_units: Dict[str, bool] = None,
+        auto_speed_units: Dict[str, bool] | None = None,
         auto_scouts_enabled: bool = True,
         auto_scouts_count: int = 5
     ) -> List[TabMatch]:
@@ -53,7 +51,7 @@ class TabMatching:
 
         # Default Einheiten die für Geschwindigkeit relevant sind (nicht tabrelevant, aber beeinflussen Laufzeit)
         laufzeit_einheiten = ["Axtkämpfer", "Leichte Kavallerie", "Katapulte", "Schwertkämpfer"]
-        # Einheiten die für die Tab-Größe relevant sind, alle anderen ignorieren wir für die Tab
+        # Einheiten die für die Tab-Größe relevant sind, alle anderen ignorieren wir für die Tabs
         tabrelevante_einheiten = ["Speerträger", "Schwertkämpfer", "Schwere Kavallerie"]
         
         if auto_speed_units is None:
@@ -71,7 +69,8 @@ class TabMatching:
             dorf_copy.rest_truppen = copy.deepcopy(dorf.truppen)
             dorf_copies.append(dorf_copy)
 
-        now = datetime.now(pytz.timezone("Europe/Berlin"))
+        berlin_tz = pytz.timezone("Europe/Berlin")
+        now = berlin_tz.localize(datetime.now())
 
         for angriff in angriffe:
             moegliche_tabs = []
