@@ -685,12 +685,6 @@ class StammGUI:
                 self._copy_to_clipboard(export_text)
             except Exception as e:
                 print(f"Fehler beim Kopieren: {e}")
-
-        def kopiere_unmatched():
-            lines = []
-            for a in unmatched:
-                lines.append(f"{a.ziel_koord}\t{a.ankunftszeit.strftime('%d.%m.%Y %H:%M:%S')}\t{a.einheit}")
-            self._copy_to_clipboard("\n".join(lines))
     
         def kopiere_unmatched_sos():
             sos_text = self._unmatched_als_sos_text(unmatched)
@@ -698,7 +692,6 @@ class StammGUI:
 
         ttk.Button(btns, text="Export-Text kopieren", command=kopiere_export).pack(side="left", padx=(0, 8))
         ttk.Button(btns, text="Unmatched als SOS kopieren", command=kopiere_unmatched_sos).pack(side="left", padx=(0, 8))
-        ttk.Button(btns, text="Unmatched kopieren", command=kopiere_unmatched).pack(side="left", padx=(0, 8))
 
         ttk.Button(btns, text="Schließen", command=popup.destroy).pack(side="left")
         
