@@ -11,6 +11,7 @@ import pytz
 import requests
 
 from distanz_rechner import DistanzRechner
+from eigene_truppen_parser import EigenesDorf
 from einheiten import get_laufzeit
 
 @dataclass
@@ -31,7 +32,7 @@ class TabMatching:
     @staticmethod
     def finde_tabs(
         angriffe: List[Angriff],
-        eigene_dörfer: List[object],
+        eigene_dörfer: List[EigenesDorf],
         tabgroessen_liste: List[Dict[str, int]],
         welt_speed: float = 1.0,
         einheiten_speed: float = 1.0,

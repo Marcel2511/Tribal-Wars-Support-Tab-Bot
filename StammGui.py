@@ -724,7 +724,8 @@ class StammGUI:
             tabs_info = f" → {anzahl_tabs} Tab(s) möglich" if anzahl_tabs is not None else ""
             
             self.tabgroessen_liste.append(kombi)
-            self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
+            if self.tab_config_display:
+                self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
             self.speichere_tabverlauf()
 
     def _berechne_moegliche_tabs(self, kombi):
@@ -759,6 +760,10 @@ class StammGUI:
 
 
     def tab_kombi_loeschen(self):
+        if not self.tab_config_display:
+            print("Tab-Konfigurationsanzeige nicht vorhanden.")
+            return
+
         auswahl = self.tab_config_display.curselection()
         for index in reversed(auswahl):
             self.tab_config_display.delete(index)
@@ -766,6 +771,9 @@ class StammGUI:
             self.speichere_tabverlauf()
 
     def lade_tabverlauf(self):
+        if not self.tab_config_display:
+            print("Tab-Konfigurationsanzeige nicht vorhanden.")
+            return
         try:
             if os.path.exists(self.VERLAUF_DATEI):
                 with open(self.VERLAUF_DATEI, "r", encoding="utf-8") as f:
@@ -792,6 +800,9 @@ class StammGUI:
     def verlauf_loeschen(self):
         if os.path.exists(self.VERLAUF_DATEI):
             os.remove(self.VERLAUF_DATEI)
+        if not self.tab_config_display:
+            print("Tab-Konfigurationsanzeige nicht vorhanden.")
+            return
         self.tab_config_display.delete(0, tk.END)
         self.tabgroessen_liste.clear()
 
