@@ -41,19 +41,6 @@ class TabMatching:
     ) -> List[TabMatch]:
         print(f"[INFO] {len(angriffe)} Angriffe, {len(eigene_dörfer)} eigene Dörfer verarbeitet")
         
-        if auto_speed_units is None:
-            # Standard: alle aktiviert
-            auto_speed_units = {
-                "Axtkämpfer": True,
-                "Leichte Kavallerie": True,
-                "Katapulte": True,
-                "Schwertkämpfer": True
-            }
-        
-        enabled_speed_units = [name for name, enabled in auto_speed_units.items() if enabled]
-        print(f"[INFO] Auto-Speed-Einheiten: {enabled_speed_units}, Auto-Scouts: {auto_scouts_enabled} (Anzahl: {auto_scouts_count})")
-
-        matches = []
         name_mapping = {
             "speerträger": "Speerträger",
             "schwertkämpfer": "Schwertkämpfer",
@@ -64,8 +51,19 @@ class TabMatching:
             "katapulte": "Katapulte"
         }
 
-        laufzeit_einheiten = ["Axtkämpfer", "Späher", "Leichte Kavallerie", "Katapulte", "Schwertkämpfer"]
+        # Default Einheiten die für Geschwindigkeit relevant sind (nicht tabrelevant, aber beeinflussen Laufzeit)
+        laufzeit_einheiten = ["Axtkämpfer", "Leichte Kavallerie", "Katapulte", "Schwertkämpfer"]
+        # Einheiten die für die Tab-Größe relevant sind, alle anderen ignorieren wir für die Tab
         tabrelevante_einheiten = ["Speerträger", "Schwertkämpfer", "Schwere Kavallerie"]
+        
+        if auto_speed_units is None:
+            # Standard: alle Laufzeit-Einheiten aktiviert
+            auto_speed_units = {einheit: True for einheit in laufzeit_einheiten}
+        
+        enabled_speed_units = [name for name, enabled in auto_speed_units.items() if enabled]
+        print(f"[INFO] Auto-Speed-Einheiten: {enabled_speed_units}, Auto-Scouts: {auto_scouts_enabled} (Anzahl: {auto_scouts_count})")
+
+        matches = []
 
         dorf_copies = []
         for dorf in eigene_dörfer:

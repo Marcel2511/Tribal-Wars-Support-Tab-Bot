@@ -73,6 +73,36 @@ class StammGUI:
             text.grid(row=row_offset, column=1, padx=5, pady=(2, 2))
             self.text_fields[label] = text
             
+            # Placeholder-Text setzen
+            placeholder = None
+            if label == "SOS Anfrage":
+                placeholder = "Angriffe > Unterstützung anfordern"
+            elif label == "Eigene Truppen":
+                placeholder = "Übersicht > Truppen > Alle"
+            elif label == "Unterstützungen":
+                placeholder = "Befehle > Unterstützungen"
+            
+            if placeholder:
+                text.insert("1.0", placeholder)
+                text.config(foreground="gray")
+                
+                def make_focus_handlers(widget, placeholder_text):
+                    def on_focus_in(event):
+                        if widget.get("1.0", "end").strip() == placeholder_text:
+                            widget.delete("1.0", "end")
+                            widget.config(foreground="black")
+                    
+                    def on_focus_out(event):
+                        if not widget.get("1.0", "end").strip():
+                            widget.insert("1.0", placeholder_text)
+                            widget.config(foreground="gray")
+                    
+                    return on_focus_in, on_focus_out
+                
+                focus_in, focus_out = make_focus_handlers(text, placeholder)
+                text.bind("<FocusIn>", focus_in)
+                text.bind("<FocusOut>", focus_out)
+            
             # Ergebnis-Label in eigener Zeile darunter
             result_label = ttk.Label(self.tk_root, text="", foreground="blue", wraplength=500, justify="left", font=("Segoe UI", 9))
             result_label.grid(row=row_offset + 1, column=1, sticky="w", padx=5, pady=(0, 8))
@@ -165,10 +195,12 @@ class StammGUI:
         # Individuelle Checkboxen für jede Geschwindigkeits-Einheit
         self.auto_speed_units = {}
         speed_units = [
+            ("Speerträger", "unit_spear.webp"),            
+            ("Schwertkämpfer", "unit_sword.webp"),            
             ("Axtkämpfer", "unit_axe.webp"),
-            ("Leichte Kavallerie", "unit_light.webp"),
+            ("Schwere Kavallerie", "unit_heavy.webp"),
             ("Katapulte", "unit_catapult.webp"),
-            ("Schwertkämpfer", "unit_sword.webp")
+            ("rammboecke", "unit_ram.webp")
         ]
         
         for idx, (name, img_file) in enumerate(speed_units):
@@ -328,8 +360,14 @@ class StammGUI:
                     result_label.config(text="Keine Truppen erkannt", foreground="orange")
                     
             elif label == "Unterstützungen":
-                # Placeholder - wenn Sie einen Parser für Unterstützungen haben
-                result_label.config(text="(Parser noch nicht implementiert)", foreground="gray")
+                supports = SupportParser.parse(eingabe)
+                if supports:
+                    result_label.config(
+                        text=f"✓ {len(supports)} Unterstützung(en) erkannt",
+                        foreground="green"
+                    )
+                else:
+                    result_label.config(text="Keine Unterstützungen erkannt", foreground="orange")
                 
         except Exception as e:
             result_label.config(text=f"⚠ Fehler beim Parsen: {str(e)}", foreground="red")
@@ -700,21 +738,21 @@ class StammGUI:
             if not eigene_dörfer:
                 return None
             
-            # Gesamte verfügbare Truppen berechnen
-            verfuegbar = {}
+            # Für jedes Dorf einzeln berechnen, wie viele Tabs möglich sind
+            gesamt_tabs = 0
             for dorf in eigene_dörfer:
-                for einheit, menge in dorf.truppen.items():
-                    verfuegbar[einheit] = verfuegbar.get(einheit, 0) + menge
+                # Für jede Einheit in der Kombination prüfen, wie oft sie gesendet werden kann
+                max_tabs_dorf = float('inf')
+                for einheit, benötigt in kombi.items():
+                    vorhanden = dorf.truppen.get(einheit, 0)
+                    if benötigt > 0:
+                        tabs_für_einheit = vorhanden // benötigt
+                        max_tabs_dorf = min(max_tabs_dorf, tabs_für_einheit)
+                
+                if max_tabs_dorf != float('inf'):
+                    gesamt_tabs += max_tabs_dorf
             
-            # Für jede Einheit in der Kombination prüfen, wie oft sie gesendet werden kann
-            max_tabs = float('inf')
-            for einheit, benötigt in kombi.items():
-                vorhanden = verfuegbar.get(einheit, 0)
-                if benötigt > 0:
-                    tabs_für_einheit = vorhanden // benötigt
-                    max_tabs = min(max_tabs, tabs_für_einheit)
-            
-            return int(max_tabs) if max_tabs != float('inf') else 0
+            return int(gesamt_tabs)
         except Exception as e:
             print(f"Fehler beim Berechnen der möglichen Tabs: {e}")
             return None
