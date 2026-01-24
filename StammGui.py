@@ -152,6 +152,64 @@ class StammGUI:
         ttk.Button(button_frame, text="Tabkombination löschen", width=22, command=self.tab_kombi_loeschen).pack(side="top", pady=(0, 5))
         ttk.Button(button_frame, text="Verlauf löschen", width=22, command=self.verlauf_loeschen).pack(side="top")
 
+        # Auto-Einheiten Frame
+        auto_frame = ttk.LabelFrame(unit_frame, text="Automatische Einheiten (für Geschwindigkeit)")
+        auto_frame.grid(row=5, column=0, columnspan=8, padx=5, pady=(10, 5), sticky="ew")
+        
+        # Konfiguriere Spalten für volle Breite
+        for i in range(6):
+            auto_frame.columnconfigure(i, weight=1)
+
+        ttk.Label(auto_frame, text="Geschwindigkeits-Einheiten automatisch hinzufügen:", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, columnspan=6, sticky="w", padx=5, pady=(5, 5))
+        
+        # Individuelle Checkboxen für jede Geschwindigkeits-Einheit
+        self.auto_speed_units = {}
+        speed_units = [
+            ("Axtkämpfer", "unit_axe.webp"),
+            ("Leichte Kavallerie", "unit_light.webp"),
+            ("Katapulte", "unit_catapult.webp"),
+            ("Schwertkämpfer", "unit_sword.webp")
+        ]
+        
+        for idx, (name, img_file) in enumerate(speed_units):
+            var = tk.BooleanVar(value=True)  # Standard: aktiviert
+            self.auto_speed_units[name] = var
+            
+            row = 1 + (idx // 4)
+            col = (idx % 4)
+            
+            try:
+                path = resource_path(os.path.join("images", img_file))
+                img = Image.open(path).resize((20, 20))
+                img_tk = ImageTk.PhotoImage(img)
+                # Speichere Referenz, damit Bild nicht garbage collected wird
+                if not hasattr(self, 'auto_speed_images'):
+                    self.auto_speed_images = {}
+                self.auto_speed_images[name] = img_tk
+                
+                ttk.Checkbutton(auto_frame, text=name, variable=var, image=img_tk, compound="left").grid(
+                    row=row, column=col, sticky="w", padx=10, pady=2
+                )
+            except Exception as e:
+                print(f"Bild-Fehler {img_file}: {e}")
+                ttk.Checkbutton(auto_frame, text=name, variable=var).grid(
+                    row=row, column=col, sticky="w", padx=10, pady=2
+                )
+
+        ttk.Separator(auto_frame, orient="horizontal").grid(row=3, column=0, columnspan=6, sticky="ew", padx=5, pady=8)
+
+        ttk.Label(auto_frame, text="Späher automatisch hinzufügen:", font=("Segoe UI", 9, "bold")).grid(row=4, column=0, columnspan=6, sticky="w", padx=5, pady=(5, 2))
+        
+        self.auto_scouts_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(auto_frame, text="Aktivieren", variable=self.auto_scouts_var).grid(row=5, column=0, sticky="w", padx=5)
+        
+        ttk.Label(auto_frame, text="Anzahl:").grid(row=5, column=1, sticky="w", padx=(20, 2))
+        self.auto_scouts_amount = ttk.Entry(auto_frame, width=5)
+        self.auto_scouts_amount.insert(0, "5")
+        self.auto_scouts_amount.grid(row=5, column=2, sticky="w", padx=(0, 5))
+        
+        ttk.Label(auto_frame, text="(oder so viele wie verfügbar)", foreground="gray").grid(row=5, column=3, sticky="w", padx=(0, 5), pady=(0, 5))
+
         bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
         bottom_frame.grid(row=7, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
 
@@ -504,13 +562,14 @@ class StammGUI:
     def zeige_berechnung_report(self, original_angriffe, gefiltert_angriffe, verwendete_angriffe, matches, unmatched):
         popup = tk.Toplevel(self.tk_root)
         popup.title("Übersicht Tab-Berechnung")
-        popup.geometry("820x520")
+        popup.geometry("820x700")
 
         container = ttk.Frame(popup, padding=12)
         container.pack(fill="both", expand=True)
         container.columnconfigure(0, weight=1)
         container.rowconfigure(3, weight=1)
         container.rowconfigure(6, weight=1)
+        container.rowconfigure(9, weight=1)
 
         # Summary
         ttk.Label(container, text="Übersicht", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
@@ -523,6 +582,33 @@ class StammGUI:
             f"Kein Tab gefunden: {len(unmatched)}"
         )
         ttk.Label(container, text=summary).grid(row=1, column=0, sticky="w", pady=(6, 12))
+
+        # Export-Text-Bereich
+        ttk.Label(container, text="Export-Text DS-Ultimate", font=("Segoe UI", 10, "bold")).grid(row=8, column=0, sticky="w", pady=(12, 0))
+        
+        export_frame = ttk.Frame(container)
+        export_frame.grid(row=9, column=0, sticky="nsew", pady=(6, 12))
+        export_frame.columnconfigure(0, weight=1)
+        export_frame.rowconfigure(0, weight=1)
+        
+        export_text_widget = tk.Text(export_frame, height=8, wrap="none")
+        export_text_widget.grid(row=0, column=0, sticky="nsew")
+        
+        # Scrollbars für Export-Text
+        export_vscroll = ttk.Scrollbar(export_frame, orient="vertical", command=export_text_widget.yview)
+        export_vscroll.grid(row=0, column=1, sticky="ns")
+        export_hscroll = ttk.Scrollbar(export_frame, orient="horizontal", command=export_text_widget.xview)
+        export_hscroll.grid(row=1, column=0, sticky="ew")
+        export_text_widget.configure(yscrollcommand=export_vscroll.set, xscrollcommand=export_hscroll.set)
+        
+        # Export-Text generieren und einfügen
+        try:
+            export_text = TabMatching.export_dsultimate(matches, self.welt_id)
+            export_text_widget.insert("1.0", export_text)
+        except Exception as e:
+            export_text_widget.insert("1.0", f"Fehler beim Generieren des Export-Textes: {e}")
+        
+        export_text_widget.config(state="disabled")
 
         # Gefiltert-Liste
         ttk.Label(container, text="Gefilterte Angriffe (Support-Match)", font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w")
@@ -556,7 +642,14 @@ class StammGUI:
 
         # Buttons
         btns = ttk.Frame(container)
-        btns.grid(row=7, column=0, sticky="e", pady=(12, 0))
+        btns.grid(row=10, column=0, sticky="e", pady=(12, 0))
+
+        def kopiere_export():
+            try:
+                export_text = TabMatching.export_dsultimate(matches, self.welt_id)
+                self._copy_to_clipboard(export_text)
+            except Exception as e:
+                print(f"Fehler beim Kopieren: {e}")
 
         def kopiere_unmatched():
             lines = []
@@ -568,6 +661,7 @@ class StammGUI:
             sos_text = self._unmatched_als_sos_text(unmatched)
             self._copy_to_clipboard(sos_text)
 
+        ttk.Button(btns, text="Export-Text kopieren", command=kopiere_export).pack(side="left", padx=(0, 8))
         ttk.Button(btns, text="Unmatched als SOS kopieren", command=kopiere_unmatched_sos).pack(side="left", padx=(0, 8))
         ttk.Button(btns, text="Unmatched kopieren", command=kopiere_unmatched).pack(side="left", padx=(0, 8))
 
@@ -804,6 +898,17 @@ class StammGUI:
                 self.boost_level = 1.0
                 print("Boost (%): Ungültiger Wert, Standardwert 0% verwendet.")
 
+            # Auto-Einheiten Einstellungen
+            auto_speed_units = {
+                name: var.get() 
+                for name, var in self.auto_speed_units.items()
+            }
+            auto_scouts_enabled = self.auto_scouts_var.get()
+            try:
+                auto_scouts_count = int(self.auto_scouts_amount.get().strip())
+            except ValueError:
+                auto_scouts_count = 5
+
             self.matches = TabMatching.finde_tabs(
                 angriffe=angriffe,
                 eigene_dörfer=eigene_dörfer,
@@ -811,7 +916,10 @@ class StammGUI:
                 welt_speed=self.welt_speed,
                 einheiten_speed=self.einheiten_speed,
                 zeitfenster_liste=zeitfenster_liste_tz,
-                boost_level=self.boost_level
+                boost_level=self.boost_level,
+                auto_speed_units=auto_speed_units,
+                auto_scouts_enabled=auto_scouts_enabled,
+                auto_scouts_count=auto_scouts_count
             )
 
             

@@ -34,9 +34,24 @@ class TabMatching:
         welt_speed: float = 1.0,
         einheiten_speed: float = 1.0,
         zeitfenster_liste=None,
-        boost_level: int = 1
+        boost_level: int = 1,
+        auto_speed_units: Dict[str, bool] = None,
+        auto_scouts_enabled: bool = True,
+        auto_scouts_count: int = 5
     ) -> List[TabMatch]:
         print(f"[INFO] {len(angriffe)} Angriffe, {len(eigene_dörfer)} eigene Dörfer verarbeitet")
+        
+        if auto_speed_units is None:
+            # Standard: alle aktiviert
+            auto_speed_units = {
+                "Axtkämpfer": True,
+                "Leichte Kavallerie": True,
+                "Katapulte": True,
+                "Schwertkämpfer": True
+            }
+        
+        enabled_speed_units = [name for name, enabled in auto_speed_units.items() if enabled]
+        print(f"[INFO] Auto-Speed-Einheiten: {enabled_speed_units}, Auto-Scouts: {auto_scouts_enabled} (Anzahl: {auto_scouts_count})")
 
         matches = []
         name_mapping = {
@@ -78,7 +93,9 @@ class TabMatching:
                     }
 
                     kandidaten = [tab_einheiten.copy()]
-                    for zusatz in laufzeit_einheiten:
+                    
+                    # Auto-Speed: Füge nur die aktivierten Geschwindigkeits-Einheiten hinzu
+                    for zusatz in enabled_speed_units:
                         if zusatz not in tab_einheiten and dorf.rest_truppen.get(zusatz, 0) > 0:
                             erweitert = tab_einheiten.copy()
                             erweitert[zusatz] = 1
@@ -86,11 +103,14 @@ class TabMatching:
 
                     for kandidat in kandidaten:
                         kandidat_mit_spaeh = kandidat.copy()
-                        verfuegbare_spaeh = dorf.rest_truppen.get("Späher", 0)
-                        if verfuegbare_spaeh >= 5:
-                            kandidat_mit_spaeh["Späher"] = 5  # Add-on
-                        elif verfuegbare_spaeh > 0:
-                            kandidat_mit_spaeh["Späher"] = verfuegbare_spaeh  # So viele wie möglich
+                        
+                        # Auto-Scouts: Füge Späher hinzu, wenn aktiviert
+                        if auto_scouts_enabled:
+                            verfuegbare_spaeh = dorf.rest_truppen.get("Späher", 0)
+                            if verfuegbare_spaeh >= auto_scouts_count:
+                                kandidat_mit_spaeh["Späher"] = auto_scouts_count
+                            elif verfuegbare_spaeh > 0:
+                                kandidat_mit_spaeh["Späher"] = verfuegbare_spaeh  # So viele wie möglich
 
                         # Prüfen, ob die tabrelevanten Einheiten vorhanden sind (Späher NICHT relevant für Ausschluss)
                         if not all(dorf.rest_truppen.get(e, 0) >= m for e, m in kandidat.items()):
