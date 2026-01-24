@@ -430,7 +430,7 @@ class StammGUI:
         ttk.Label(container, text=f"Version: {version}").grid(
             row=1, column=0, columnspan=3, sticky="w"
         )
-        ttk.Label(container, text=f"Autor: {autor}").grid(
+        ttk.Label(container, text=f"Autor: {author}").grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(0, 12)
         )
 
