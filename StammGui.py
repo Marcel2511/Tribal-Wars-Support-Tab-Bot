@@ -53,6 +53,7 @@ class StammGUI:
         self.boost_level = 0
         self.zeitfenster_liste = []
         self.zeitfenster_tree = None 
+        self.tab_config_display: tk.Listbox | None = None
 
         self.build_gui()
         self.lade_tabverlauf()
@@ -62,26 +63,38 @@ class StammGUI:
 
     def build_gui(self):
         self.text_fields = {}
+        self.result_labels = {}
         labels = ["SOS Anfrage", "Eigene Truppen", "Unterstützungen"]
         for idx, label in enumerate(labels):
-            ttk.Label(self.tk_root, text=label + ":").grid(row=idx, column=0, sticky="nw", padx=5, pady=(2, 2))
+            row_offset = idx * 2  # Jedes Feld bekommt 2 Zeilen (Text + Ergebnis)
+            
+            ttk.Label(self.tk_root, text=label + ":").grid(row=row_offset, column=0, sticky="nw", padx=5, pady=(2, 2))
             text = tk.Text(self.tk_root, width=60, height=3)
-            text.grid(row=idx, column=1, padx=5, pady=(2, 2))
+            text.grid(row=row_offset, column=1, padx=5, pady=(2, 2))
             self.text_fields[label] = text
+            
+            # Ergebnis-Label in eigener Zeile darunter
+            result_label = ttk.Label(self.tk_root, text="", foreground="blue", wraplength=500, justify="left", font=("Segoe UI", 9))
+            result_label.grid(row=row_offset + 1, column=1, sticky="w", padx=5, pady=(0, 8))
+            self.result_labels[label] = result_label
+            
+            # Event-Handler für Texteingabe
+            text.bind("<KeyRelease>", lambda e, lbl=label: self.aktualisiere_parse_ergebnis(lbl))
+            text.bind("<<Paste>>", lambda e, lbl=label: self.tk_root.after(100, lambda: self.aktualisiere_parse_ergebnis(lbl)))
 
         ttk.Label(self.tk_root, text="Welt-ID (z.B. 236):").grid(row=0, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.welt_id_entry = ttk.Entry(self.tk_root, width=5)
         self.welt_id_entry.grid(row=0, column=3, sticky="nw", padx=5, pady=(2, 2))
 
-        ttk.Label(self.tk_root, text="LZ-Multiplikator(%):").grid(row=1, column=2, sticky="nw", padx=5, pady=(2, 2))
+        ttk.Label(self.tk_root, text="LZ-Multiplikator(%):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.boost_entry = ttk.Entry(self.tk_root, width=5)
         self.boost_entry.insert(0, "0")
-        self.boost_entry.grid(row=1, column=3, sticky="nw", padx=5, pady=(2, 2))
+        self.boost_entry.grid(row=2, column=3, sticky="nw", padx=5, pady=(2, 2))
 
-        ttk.Label(self.tk_root, text="Support-Filter (+Sek. nach Angriff):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
+        ttk.Label(self.tk_root, text="Support-Filter (+Sek. nach Angriff):").grid(row=4, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.support_filter_seconds_entry = ttk.Entry(self.tk_root, width=5)
         self.support_filter_seconds_entry.insert(0, "0")
-        self.support_filter_seconds_entry.grid(row=2, column=3, sticky="nw", padx=5, pady=(2, 2))
+        self.support_filter_seconds_entry.grid(row=4, column=3, sticky="nw", padx=5, pady=(2, 2))
 
         self.einheiten = {
             "Speerträger": "unit_spear.webp",
@@ -100,7 +113,7 @@ class StammGUI:
         self.tab_config_display = None
 
         unit_frame = ttk.LabelFrame(self.tk_root, text="Einheiten Auswahl")
-        unit_frame.grid(row=3, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
+        unit_frame.grid(row=6, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
 
         for idx, (name, img_file) in enumerate(self.einheiten.items()):
             var = tk.BooleanVar()
@@ -135,7 +148,7 @@ class StammGUI:
         ttk.Button(button_frame, text="Verlauf löschen", width=22, command=self.verlauf_loeschen).pack(side="top")
 
         bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
-        bottom_frame.grid(row=4, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
+        bottom_frame.grid(row=7, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
 
         # Damit Treeview sauber strecken kann
         bottom_frame.columnconfigure(0, weight=1)
@@ -213,6 +226,50 @@ class StammGUI:
 
         self.export_button = ttk.Button(right_btns, text="Exportieren", command=self.exportiere, state="disabled")
         self.export_button.pack(side="left", ipadx=20, ipady=6)
+
+
+    def aktualisiere_parse_ergebnis(self, label):
+        """Zeigt sofort das Parse-Ergebnis an"""
+        text_widget = self.text_fields[label]
+        result_label = self.result_labels[label]
+        
+        eingabe = text_widget.get("1.0", "end").strip()
+        
+        if not eingabe:
+            result_label.config(text="")
+            return
+        
+        try:
+            if label == "SOS Anfrage":
+                angriffe = SosParser.parse(eingabe)
+                if angriffe:
+                    result_label.config(
+                        text=f"✓ {len(angriffe)} Angriff(e) erkannt",
+                        foreground="green"
+                    )
+                else:
+                    result_label.config(text="Keine Angriffe erkannt", foreground="orange")
+                    
+            elif label == "Eigene Truppen":
+                eigene_dörfer = EigeneTruppenParser.parse(eingabe)
+                if eigene_dörfer:
+                    gesamt_truppen = sum(
+                        sum(dorf.truppen.values()) 
+                        for dorf in eigene_dörfer
+                    )
+                    result_label.config(
+                        text=f"✓ {len(eigene_dörfer)} Dorf/Dörfer, {gesamt_truppen} Einheiten gesamt",
+                        foreground="green"
+                    )
+                else:
+                    result_label.config(text="Keine Truppen erkannt", foreground="orange")
+                    
+            elif label == "Unterstützungen":
+                # Placeholder - wenn Sie einen Parser für Unterstützungen haben
+                result_label.config(text="(Parser noch nicht implementiert)", foreground="gray")
+                
+        except Exception as e:
+            result_label.config(text=f"⚠ Fehler beim Parsen: {str(e)}", foreground="red")
 
 
     def zeige_kontakt_fenster(self):
@@ -886,27 +943,27 @@ class StammGUI:
         grid = ttk.Frame(container)
         grid.pack()
 
-        year = ttk.Combobox(grid, values=list(range(2024, 2031)), width=5)
+        year = ttk.Combobox(grid, values=[str(y) for y in range(2024, 2031)], width=5)
         year.set(default_time.year)
         year.grid(row=0, column=0)
 
-        month = ttk.Combobox(grid, values=list(range(1, 13)), width=3)
+        month = ttk.Combobox(grid, values=[str(m) for m in range(1, 13)], width=3)
         month.set(default_time.month)
         month.grid(row=0, column=1)
 
-        day = ttk.Combobox(grid, values=list(range(1, 32)), width=3)
+        day = ttk.Combobox(grid, values=[str(d) for d in range(1, 32)], width=3)
         day.set(default_time.day)
         day.grid(row=0, column=2)
 
-        hour = ttk.Combobox(grid, values=list(range(0, 24)), width=3)
+        hour = ttk.Combobox(grid, values=[str(h) for h in range(0, 24)], width=3)
         hour.set(default_time.hour)
         hour.grid(row=1, column=0)
 
-        minute = ttk.Combobox(grid, values=list(range(0, 60)), width=3)
+        minute = ttk.Combobox(grid, values=[str(m) for m in range(0, 60)], width=3)
         minute.set(default_time.minute)
         minute.grid(row=1, column=1)
 
-        second = ttk.Combobox(grid, values=list(range(0, 60)), width=3)
+        second = ttk.Combobox(grid, values=[str(s) for s in range(0, 60)], width=3)
         second.set(default_time.second)
         second.grid(row=1, column=2)
 
