@@ -28,6 +28,12 @@ from bisect import bisect_left
 from collections import Counter
 
 
+# === Daten ===        
+discord_handle = "marcel6301"
+github_repo = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
+anleitung_url = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/wiki/Anleitung-Tabtool"
+version = "V3.1"
+author = "Marcel Wollbaum"
 
 class StammGUI:
     if getattr(sys, 'frozen', False):
@@ -42,7 +48,7 @@ class StammGUI:
 
     def __init__(self, root):
         self.tk_root = root
-        self.tk_root.title("Die Stämme Tab-Tool V3.0 by Marcel Wollbaum")
+        self.tk_root.title(f"Die Stämme Tab-Tool {version} by {author}")
 
         self.matches = []
         self.tabgroessen_liste = []
@@ -401,13 +407,6 @@ class StammGUI:
 
         container = ttk.Frame(popup, padding=12)
         container.pack(fill="both", expand=True)
-
-        # === Daten ===
-        autor = "Marcel Wollbaum"
-        version = "V3.0"
-        discord_handle = "marcel6301"
-        github_repo = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
-        anleitung_url = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/wiki/Anleitung-Tabtool"
 
         # === Überschrift ===
         ttk.Label(
