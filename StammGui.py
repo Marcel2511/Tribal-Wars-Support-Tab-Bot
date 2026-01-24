@@ -194,8 +194,8 @@ class StammGUI:
         ttk.Button(button_frame, text="Verlauf löschen", width=22, command=self.verlauf_loeschen).pack(side="top")
 
         # Auto-Einheiten Frame
-        auto_frame = ttk.LabelFrame(unit_frame, text="Automatische Einheiten (für Geschwindigkeit)")
-        auto_frame.grid(row=5, column=0, columnspan=8, padx=5, pady=(10, 5), sticky="ew")
+        auto_frame = ttk.LabelFrame(self.tk_root, text="Automatische Einheiten (für Geschwindigkeit)")
+        auto_frame.grid(row=7, column=0, columnspan=5, padx=10, pady=(0, 10), sticky="ew")
         
         # Konfiguriere Spalten für volle Breite
         for i in range(6):
@@ -252,8 +252,8 @@ class StammGUI:
         ttk.Label(auto_frame, text="(oder so viele wie verfügbar)", foreground="gray").grid(row=5, column=3, sticky="w", padx=(0, 5), pady=(0, 5))
 
         bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
-        bottom_frame.grid(row=7, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
-
+        bottom_frame.grid(row=8, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
+        
         # Damit Treeview sauber strecken kann
         bottom_frame.columnconfigure(0, weight=1)
         bottom_frame.rowconfigure(1, weight=1)
