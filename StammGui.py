@@ -28,6 +28,12 @@ from bisect import bisect_left
 from collections import Counter
 
 
+# === Daten ===        
+discord_handle = "marcel6301"
+github_repo = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
+anleitung_url = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/wiki/Anleitung-Tabtool"
+version = "V3.1"
+author = "Marcel Wollbaum"
 
 class StammGUI:
     if getattr(sys, 'frozen', False):
@@ -42,7 +48,7 @@ class StammGUI:
 
     def __init__(self, root):
         self.tk_root = root
-        self.tk_root.title("Die Stämme Tab-Tool V3.0 by Marcel Wollbaum")
+        self.tk_root.title(f"Die Stämme Tab-Tool {version} by {author}")
 
         self.matches = []
         self.tabgroessen_liste = []
@@ -53,6 +59,9 @@ class StammGUI:
         self.boost_level = 0
         self.zeitfenster_liste = []
         self.zeitfenster_tree = None 
+        self.tab_config_display: tk.Listbox | None = None
+        self.support_filter_enabled = True
+        self.min_send_interval_seconds = 0
 
         self.build_gui()
         self.lade_tabverlauf()
@@ -62,26 +71,97 @@ class StammGUI:
 
     def build_gui(self):
         self.text_fields = {}
+        self.result_labels = {}
         labels = ["SOS Anfrage", "Eigene Truppen", "Unterstützungen"]
         for idx, label in enumerate(labels):
-            ttk.Label(self.tk_root, text=label + ":").grid(row=idx, column=0, sticky="nw", padx=5, pady=(2, 2))
+            row_offset = idx * 2  # Jedes Feld bekommt 2 Zeilen (Text + Ergebnis)
+            
+            ttk.Label(self.tk_root, text=label + ":").grid(row=row_offset, column=0, sticky="nw", padx=5, pady=(2, 2))
             text = tk.Text(self.tk_root, width=60, height=3)
-            text.grid(row=idx, column=1, padx=5, pady=(2, 2))
+            text.grid(row=row_offset, column=1, padx=5, pady=(2, 2))
             self.text_fields[label] = text
+            
+            # Placeholder-Text setzen
+            placeholder = None
+            if label == "SOS Anfrage":
+                placeholder = "Angriffe > Unterstützung anfordern"
+            elif label == "Eigene Truppen":
+                placeholder = "Übersicht > Truppen > Alle"
+            elif label == "Unterstützungen":
+                placeholder = "Befehle > Unterstützungen"
+            
+            if placeholder:
+                text.insert("1.0", placeholder)
+                text.config(foreground="gray")
+                
+                def make_focus_handlers(widget, placeholder_text):
+                    def on_focus_in(event):
+                        if widget.get("1.0", "end").strip() == placeholder_text:
+                            widget.delete("1.0", "end")
+                            widget.config(foreground="black")
+                    
+                    def on_focus_out(event):
+                        if not widget.get("1.0", "end").strip():
+                            widget.insert("1.0", placeholder_text)
+                            widget.config(foreground="gray")
+                    
+                    return on_focus_in, on_focus_out
+                
+                focus_in, focus_out = make_focus_handlers(text, placeholder)
+                text.bind("<FocusIn>", focus_in)
+                text.bind("<FocusOut>", focus_out)
+            
+            # Ergebnis-Label in eigener Zeile darunter
+            result_label = ttk.Label(self.tk_root, text="", foreground="blue", wraplength=500, justify="left", font=("Segoe UI", 9))
+            result_label.grid(row=row_offset + 1, column=1, sticky="w", padx=5, pady=(0, 8))
+            self.result_labels[label] = result_label
+            
+            # Event-Handler für Texteingabe
+            text.bind("<KeyRelease>", lambda e, lbl=label: self.aktualisiere_parse_ergebnis(lbl))
+            text.bind("<<Paste>>", lambda e, lbl=label: self.tk_root.after(100, lambda: self.aktualisiere_parse_ergebnis(lbl)))
+            
+            # Bei "Eigene Truppen" auch Tab-Anzeige aktualisieren
+            if label == "Eigene Truppen":
+                text.bind("<KeyRelease>", lambda e, lbl=label: self._on_truppen_change(lbl), add="+")
+                text.bind("<<Paste>>", lambda e, lbl=label: self.tk_root.after(100, lambda: self._on_truppen_change(lbl)), add="+")
 
         ttk.Label(self.tk_root, text="Welt-ID (z.B. 236):").grid(row=0, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.welt_id_entry = ttk.Entry(self.tk_root, width=5)
         self.welt_id_entry.grid(row=0, column=3, sticky="nw", padx=5, pady=(2, 2))
 
-        ttk.Label(self.tk_root, text="LZ-Multiplikator(%):").grid(row=1, column=2, sticky="nw", padx=5, pady=(2, 2))
+        # Speichere Welt-ID bei jeder Änderung
+        self.welt_id_entry.bind("<FocusOut>", self._on_welt_id_change)
+        self.welt_id_entry.bind("<Return>", self._on_welt_id_change)
+
+
+        ttk.Label(self.tk_root, text="LZ-Multiplikator(%):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.boost_entry = ttk.Entry(self.tk_root, width=5)
         self.boost_entry.insert(0, "0")
-        self.boost_entry.grid(row=1, column=3, sticky="nw", padx=5, pady=(2, 2))
+        self.boost_entry.grid(row=2, column=3, sticky="nw", padx=5, pady=(2, 2))
 
-        ttk.Label(self.tk_root, text="Support-Filter (+Sek. nach Angriff):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
+        ttk.Label(self.tk_root, text="Support-Filter (+Sek. nach Angriff):").grid(row=4, column=2, sticky="nw", padx=5, pady=(2, 2))
         self.support_filter_seconds_entry = ttk.Entry(self.tk_root, width=5)
         self.support_filter_seconds_entry.insert(0, "0")
-        self.support_filter_seconds_entry.grid(row=2, column=3, sticky="nw", padx=5, pady=(2, 2))
+        self.support_filter_seconds_entry.grid(row=4, column=3, sticky="nw", padx=5, pady=(2, 2))
+
+        # Mindestabstand zwischen Tabs
+        ttk.Label(self.tk_root, text="Min. Abstand Tab-Versand (Sek.):").grid(row=5, column=2, sticky="nw", padx=5, pady=(2, 2))
+        self.min_send_interval_entry = ttk.Entry(self.tk_root, width=5)
+        self.min_send_interval_entry.insert(0, "0")
+        self.min_send_interval_entry.grid(row=5, column=3, sticky="nw", padx=5, pady=(2, 2))
+        
+        # Bind save event
+        self.min_send_interval_entry.bind("<FocusOut>", self._on_min_interval_change)
+        self.min_send_interval_entry.bind("<Return>", self._on_min_interval_change)
+
+        # Support-Filter aktivieren/deaktivieren
+        self.support_filter_var = tk.BooleanVar(value=self.support_filter_enabled)
+        ttk.Checkbutton(
+            self.tk_root, 
+            text="Support-Filter aktivieren", 
+            variable=self.support_filter_var,
+            command=self._on_support_filter_change
+        ).grid(row=6, column=2, columnspan=2, sticky="w", padx=5, pady=(0, 2))
 
         self.einheiten = {
             "Speerträger": "unit_spear.webp",
@@ -100,7 +180,7 @@ class StammGUI:
         self.tab_config_display = None
 
         unit_frame = ttk.LabelFrame(self.tk_root, text="Einheiten Auswahl")
-        unit_frame.grid(row=3, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
+        unit_frame.grid(row=7, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
 
         for idx, (name, img_file) in enumerate(self.einheiten.items()):
             var = tk.BooleanVar()
@@ -134,9 +214,67 @@ class StammGUI:
         ttk.Button(button_frame, text="Tabkombination löschen", width=22, command=self.tab_kombi_loeschen).pack(side="top", pady=(0, 5))
         ttk.Button(button_frame, text="Verlauf löschen", width=22, command=self.verlauf_loeschen).pack(side="top")
 
-        bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
-        bottom_frame.grid(row=4, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
+        # Auto-Einheiten Frame
+        auto_frame = ttk.LabelFrame(self.tk_root, text="Automatische Einheiten (für Geschwindigkeit)")
+        auto_frame.grid(row=8, column=0, columnspan=5, padx=10, pady=(0, 10), sticky="ew")
+        
+        # Konfiguriere Spalten für volle Breite
+        for i in range(6):
+            auto_frame.columnconfigure(i, weight=1)
+        
+        # Individuelle Checkboxen für jede Geschwindigkeits-Einheit
+        self.auto_speed_units = {}
+        speed_units = [
+            ("Speerträger", "unit_spear.webp"),
+            ("Schwertkämpfer", "unit_sword.webp"),
+            ("Axtkämpfer", "unit_axe.webp"),
+            ("Schwere Kavallerie", "unit_heavy.webp"),
+            ("Katapulte", "unit_catapult.webp"),
+            ("Rammböcke", "unit_ram.webp")
+        ]
+        
+        for idx, (name, img_file) in enumerate(speed_units):
+            var = tk.BooleanVar(value=True)  # Standard: aktiviert
+            self.auto_speed_units[name] = var
+            
+            row = 1 + (idx // 4)
+            col = (idx % 4)
+            
+            try:
+                path = resource_path(os.path.join("images", img_file))
+                img = Image.open(path).resize((20, 20))
+                img_tk = ImageTk.PhotoImage(img)
+                # Speichere Referenz, damit Bild nicht garbage collected wird
+                if not hasattr(self, 'auto_speed_images'):
+                    self.auto_speed_images = {}
+                self.auto_speed_images[name] = img_tk
+                
+                ttk.Checkbutton(auto_frame, text=name, variable=var, image=img_tk, compound="left").grid(
+                    row=row, column=col, sticky="w", padx=10, pady=2
+                )
+            except Exception as e:
+                print(f"Bild-Fehler {img_file}: {e}")
+                ttk.Checkbutton(auto_frame, text=name, variable=var).grid(
+                    row=row, column=col, sticky="w", padx=10, pady=2
+                )
 
+        ttk.Separator(auto_frame, orient="horizontal").grid(row=3, column=0, columnspan=6, sticky="ew", padx=5, pady=8)
+
+        ttk.Label(auto_frame, text="Späher automatisch hinzufügen:", font=("Segoe UI", 9, "bold")).grid(row=4, column=0, columnspan=6, sticky="w", padx=5, pady=(5, 2))
+        
+        self.auto_scouts_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(auto_frame, text="Aktivieren", variable=self.auto_scouts_var).grid(row=5, column=0, sticky="w", padx=5)
+        
+        ttk.Label(auto_frame, text="Anzahl:").grid(row=5, column=1, sticky="w", padx=(20, 2))
+        self.auto_scouts_amount = ttk.Entry(auto_frame, width=5)
+        self.auto_scouts_amount.insert(0, "5")
+        self.auto_scouts_amount.grid(row=5, column=2, sticky="w", padx=(0, 5))
+        
+        ttk.Label(auto_frame, text="(oder so viele wie verfügbar)", foreground="gray").grid(row=5, column=3, sticky="w", padx=(0, 5), pady=(0, 5))
+
+        bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
+        bottom_frame.grid(row=9, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
+        
         # Damit Treeview sauber strecken kann
         bottom_frame.columnconfigure(0, weight=1)
         bottom_frame.rowconfigure(1, weight=1)
@@ -215,6 +353,100 @@ class StammGUI:
         self.export_button.pack(side="left", ipadx=20, ipady=6)
 
 
+    def _on_welt_id_change(self, event=None):
+        """Speichert die Welt-ID wenn sie geändert wird"""
+        welt_id = self.welt_id_entry.get().strip()
+        if welt_id.isdigit():
+            self.welt_id = welt_id
+            self.speichere_config()
+
+    def _on_support_filter_change(self):
+        """Speichert Support-Filter Einstellung"""
+        self.support_filter_enabled = self.support_filter_var.get()
+        self.speichere_config()
+
+    def _on_min_interval_change(self, event=None):
+        """Speichert Mindestabstand zwischen Tabs"""
+        try:
+            interval = int(self.min_send_interval_entry.get().strip())
+            if interval >= 0:
+                self.min_send_interval_seconds = interval
+                self.speichere_config()
+        except ValueError:
+            pass
+
+    def aktualisiere_parse_ergebnis(self, label):
+        """Zeigt sofort das Parse-Ergebnis an"""
+        text_widget = self.text_fields[label]
+        result_label = self.result_labels[label]
+        
+        eingabe = text_widget.get("1.0", "end").strip()
+        
+        if not eingabe:
+            result_label.config(text="")
+            return
+        
+        try:
+            if label == "SOS Anfrage":
+                angriffe = SosParser.parse(eingabe)
+                if angriffe:
+                    result_label.config(
+                        text=f"✓ {len(angriffe)} Angriff(e) erkannt",
+                        foreground="green"
+                    )
+                else:
+                    result_label.config(text="Keine Angriffe erkannt", foreground="orange")
+                    
+            elif label == "Eigene Truppen":
+                eigene_dörfer = EigeneTruppenParser.parse(eingabe)
+                if eigene_dörfer:
+                    gesamt_truppen = sum(
+                        sum(dorf.truppen.values()) 
+                        for dorf in eigene_dörfer
+                    )
+                    result_label.config(
+                        text=f"✓ {len(eigene_dörfer)} Dorf/Dörfer, {gesamt_truppen} Einheiten gesamt",
+                        foreground="green"
+                    )
+                else:
+                    result_label.config(text="Keine Truppen erkannt", foreground="orange")
+                    
+            elif label == "Unterstützungen":
+                supports = SupportParser.parse(eingabe)
+                if supports:
+                    result_label.config(
+                        text=f"✓ {len(supports)} Unterstützung(en) erkannt",
+                        foreground="green"
+                    )
+                else:
+                    result_label.config(text="Keine Unterstützungen erkannt", foreground="orange")
+                
+        except Exception as e:
+            result_label.config(text=f"⚠ Fehler beim Parsen: {str(e)}", foreground="red")
+
+
+    def _on_truppen_change(self, label):
+        """Wird aufgerufen wenn sich die Eigene Truppen ändern"""
+        self.aktualisiere_parse_ergebnis(label)
+        self._aktualisiere_tab_anzeige()
+
+    def _aktualisiere_tab_anzeige(self):
+        """Aktualisiert die Anzeige der möglichen Tabs für alle Kombinationen"""
+        if not self.tab_config_display:
+            return
+        
+        # Alle Einträge neu aufbauen
+        self.tab_config_display.delete(0, tk.END)
+        for kombi in self.tabgroessen_liste:
+            beschreibung = [f"{menge}x {einheit}" for einheit, menge in kombi.items()]
+            
+            # Berechne mögliche Tabs
+            anzahl_tabs = self._berechne_moegliche_tabs(kombi)
+            tabs_info = f" → {anzahl_tabs} Tab(s) möglich" if anzahl_tabs is not None else ""
+            
+            self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
+
+
     def zeige_kontakt_fenster(self):
         popup = tk.Toplevel(self.tk_root)
         popup.title("Kontakt")
@@ -223,13 +455,6 @@ class StammGUI:
 
         container = ttk.Frame(popup, padding=12)
         container.pack(fill="both", expand=True)
-
-        # === Daten ===
-        autor = "Marcel Wollbaum"
-        version = "V3.0"
-        discord_handle = "marcel6301"
-        github_repo = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot"
-        anleitung_url = "https://github.com/Marcel2511/Tribal-Wars-Support-Tab-Bot/wiki/Anleitung-Tabtool"
 
         # === Überschrift ===
         ttk.Label(
@@ -241,7 +466,7 @@ class StammGUI:
         ttk.Label(container, text=f"Version: {version}").grid(
             row=1, column=0, columnspan=3, sticky="w"
         )
-        ttk.Label(container, text=f"Autor: {autor}").grid(
+        ttk.Label(container, text=f"Autor: {author}").grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(0, 12)
         )
 
@@ -311,6 +536,24 @@ class StammGUI:
                     cfg = json.load(f)
                 self.dsu_api_key = (cfg.get("dsu_api_key") or "")
                 self.archer_enabled = bool(cfg.get("archer_enabled", False))
+                self.support_filter_enabled = bool(cfg.get("support_filter_enabled", True))
+                self.min_send_interval_seconds = int(cfg.get("min_send_interval_seconds", 0))
+                
+                # Support-Filter Checkbox aktualisieren
+                if hasattr(self, 'support_filter_var'):
+                    self.support_filter_var.set(self.support_filter_enabled)
+                
+                # Min Send Interval aktualisieren
+                if hasattr(self, 'min_send_interval_entry'):
+                    self.min_send_interval_entry.delete(0, tk.END)
+                    self.min_send_interval_entry.insert(0, str(self.min_send_interval_seconds))
+                
+                # Welt-ID laden
+                saved_welt_id = cfg.get("welt_id", "")
+                if saved_welt_id:
+                    self.welt_id = saved_welt_id
+                    self.welt_id_entry.delete(0, tk.END)
+                    self.welt_id_entry.insert(0, saved_welt_id)
         except Exception as e:
             print(f"Fehler beim Laden der Config: {e}")
 
@@ -319,6 +562,9 @@ class StammGUI:
             cfg = {
                 "dsu_api_key": self.dsu_api_key,
                 "archer_enabled": self.archer_enabled,
+                "welt_id": self.welt_id,
+                "support_filter_enabled": self.support_filter_enabled,
+                "min_send_interval_seconds": self.min_send_interval_seconds,
             }
             with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
@@ -420,13 +666,14 @@ class StammGUI:
     def zeige_berechnung_report(self, original_angriffe, gefiltert_angriffe, verwendete_angriffe, matches, unmatched):
         popup = tk.Toplevel(self.tk_root)
         popup.title("Übersicht Tab-Berechnung")
-        popup.geometry("820x520")
+        popup.geometry("820x700")
 
         container = ttk.Frame(popup, padding=12)
         container.pack(fill="both", expand=True)
         container.columnconfigure(0, weight=1)
         container.rowconfigure(3, weight=1)
         container.rowconfigure(6, weight=1)
+        container.rowconfigure(9, weight=1)
 
         # Summary
         ttk.Label(container, text="Übersicht", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
@@ -439,6 +686,33 @@ class StammGUI:
             f"Kein Tab gefunden: {len(unmatched)}"
         )
         ttk.Label(container, text=summary).grid(row=1, column=0, sticky="w", pady=(6, 12))
+
+        # Export-Text-Bereich
+        ttk.Label(container, text="Export-Text DS-Ultimate", font=("Segoe UI", 10, "bold")).grid(row=8, column=0, sticky="w", pady=(12, 0))
+        
+        export_frame = ttk.Frame(container)
+        export_frame.grid(row=9, column=0, sticky="nsew", pady=(6, 12))
+        export_frame.columnconfigure(0, weight=1)
+        export_frame.rowconfigure(0, weight=1)
+        
+        export_text_widget = tk.Text(export_frame, height=8, wrap="none")
+        export_text_widget.grid(row=0, column=0, sticky="nsew")
+        
+        # Scrollbars für Export-Text
+        export_vscroll = ttk.Scrollbar(export_frame, orient="vertical", command=export_text_widget.yview)
+        export_vscroll.grid(row=0, column=1, sticky="ns")
+        export_hscroll = ttk.Scrollbar(export_frame, orient="horizontal", command=export_text_widget.xview)
+        export_hscroll.grid(row=1, column=0, sticky="ew")
+        export_text_widget.configure(yscrollcommand=export_vscroll.set, xscrollcommand=export_hscroll.set)
+        
+        # Export-Text generieren und einfügen
+        try:
+            export_text = TabMatching.export_dsultimate(matches, self.welt_id)
+            export_text_widget.insert("1.0", export_text)
+        except Exception as e:
+            export_text_widget.insert("1.0", f"Fehler beim Generieren des Export-Textes: {e}")
+        
+        export_text_widget.config(state="disabled")
 
         # Gefiltert-Liste
         ttk.Label(container, text="Gefilterte Angriffe (Support-Match)", font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w")
@@ -472,20 +746,21 @@ class StammGUI:
 
         # Buttons
         btns = ttk.Frame(container)
-        btns.grid(row=7, column=0, sticky="e", pady=(12, 0))
+        btns.grid(row=10, column=0, sticky="e", pady=(12, 0))
 
-        def kopiere_unmatched():
-            lines = []
-            for a in unmatched:
-                lines.append(f"{a.ziel_koord}\t{a.ankunftszeit.strftime('%d.%m.%Y %H:%M:%S')}\t{a.einheit}")
-            self._copy_to_clipboard("\n".join(lines))
+        def kopiere_export():
+            try:
+                export_text = TabMatching.export_dsultimate(matches, self.welt_id)
+                self._copy_to_clipboard(export_text)
+            except Exception as e:
+                print(f"Fehler beim Kopieren: {e}")
     
         def kopiere_unmatched_sos():
             sos_text = self._unmatched_als_sos_text(unmatched)
             self._copy_to_clipboard(sos_text)
 
+        ttk.Button(btns, text="Export-Text kopieren", command=kopiere_export).pack(side="left", padx=(0, 8))
         ttk.Button(btns, text="Unmatched als SOS kopieren", command=kopiere_unmatched_sos).pack(side="left", padx=(0, 8))
-        ttk.Button(btns, text="Unmatched kopieren", command=kopiere_unmatched).pack(side="left", padx=(0, 8))
 
         ttk.Button(btns, text="Schließen", command=popup.destroy).pack(side="left")
         
@@ -503,11 +778,51 @@ class StammGUI:
                 except ValueError:
                     continue
         if kombi:
+            # Berechne wie viele Tabs möglich sind
+            anzahl_tabs = self._berechne_moegliche_tabs(kombi)
+            tabs_info = f" → {anzahl_tabs} Tab(s) möglich" if anzahl_tabs is not None else ""
+            
             self.tabgroessen_liste.append(kombi)
-            self.tab_config_display.insert(tk.END, ", ".join(beschreibung))
+            if self.tab_config_display:
+                self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
             self.speichere_tabverlauf()
 
+    def _berechne_moegliche_tabs(self, kombi):
+        """Berechnet wie viele Tabs mit dieser Kombination möglich sind"""
+        try:
+            truppen_text = self.text_fields["Eigene Truppen"].get("1.0", "end").strip()
+            if not truppen_text:
+                return None
+            
+            eigene_dörfer = EigeneTruppenParser.parse(truppen_text)
+            if not eigene_dörfer:
+                return None
+            
+            # Für jedes Dorf einzeln berechnen, wie viele Tabs möglich sind
+            gesamt_tabs = 0
+            for dorf in eigene_dörfer:
+                # Für jede Einheit in der Kombination prüfen, wie oft sie gesendet werden kann
+                max_tabs_dorf = float('inf')
+                for einheit, benötigt in kombi.items():
+                    vorhanden = dorf.truppen.get(einheit, 0)
+                    if benötigt > 0:
+                        tabs_für_einheit = vorhanden // benötigt
+                        max_tabs_dorf = min(max_tabs_dorf, tabs_für_einheit)
+                
+                if max_tabs_dorf != float('inf'):
+                    gesamt_tabs += max_tabs_dorf
+            
+            return int(gesamt_tabs)
+        except Exception as e:
+            print(f"Fehler beim Berechnen der möglichen Tabs: {e}")
+            return None
+
+
     def tab_kombi_loeschen(self):
+        if not self.tab_config_display:
+            print("Tab-Konfigurationsanzeige nicht vorhanden.")
+            return
+
         auswahl = self.tab_config_display.curselection()
         for index in reversed(auswahl):
             self.tab_config_display.delete(index)
@@ -515,6 +830,9 @@ class StammGUI:
             self.speichere_tabverlauf()
 
     def lade_tabverlauf(self):
+        if not self.tab_config_display:
+            print("Tab-Konfigurationsanzeige nicht vorhanden.")
+            return
         try:
             if os.path.exists(self.VERLAUF_DATEI):
                 with open(self.VERLAUF_DATEI, "r", encoding="utf-8") as f:
@@ -522,7 +840,12 @@ class StammGUI:
                     for kombi in daten:
                         self.tabgroessen_liste.append(kombi)
                         beschreibung = [f"{menge}x {einheit}" for einheit, menge in kombi.items()]
-                        self.tab_config_display.insert(tk.END, ", ".join(beschreibung))
+                        
+                        # Berechne mögliche Tabs auch beim Laden
+                        anzahl_tabs = self._berechne_moegliche_tabs(kombi)
+                        tabs_info = f" → {anzahl_tabs} Tab(s) möglich" if anzahl_tabs is not None else ""
+                        
+                        self.tab_config_display.insert(tk.END, ", ".join(beschreibung) + tabs_info)
         except Exception as e:
             print(f"Fehler beim Laden des Verlaufs: {e}")
 
@@ -536,6 +859,9 @@ class StammGUI:
     def verlauf_loeschen(self):
         if os.path.exists(self.VERLAUF_DATEI):
             os.remove(self.VERLAUF_DATEI)
+        if not self.tab_config_display:
+            print("Tab-Konfigurationsanzeige nicht vorhanden.")
+            return
         self.tab_config_display.delete(0, tk.END)
         self.tabgroessen_liste.clear()
 
@@ -646,9 +972,13 @@ class StammGUI:
             except Exception:
                 support_filter_seconds = 0
 
-            angriffe, gefiltert_angriffe = self._filter_angriffe_mit_supports(
-                angriffe, supports, support_filter_seconds
-            )
+            # Support-Filter nur anwenden wenn aktiviert
+            if self.support_filter_enabled and supports:
+                angriffe, gefiltert_angriffe = self._filter_angriffe_mit_supports(
+                    angriffe, supports, support_filter_seconds
+                )
+            else:
+                gefiltert_angriffe = []
 
             # Zeitfenster (immer als Liste; wenn leer -> keine Einschränkung)
             tz = pytz.timezone("Europe/Berlin")
@@ -680,6 +1010,17 @@ class StammGUI:
                 self.boost_level = 1.0
                 print("Boost (%): Ungültiger Wert, Standardwert 0% verwendet.")
 
+            # Auto-Einheiten Einstellungen
+            auto_speed_units = {
+                name: var.get() 
+                for name, var in self.auto_speed_units.items()
+            }
+            auto_scouts_enabled = self.auto_scouts_var.get()
+            try:
+                auto_scouts_count = int(self.auto_scouts_amount.get().strip())
+            except ValueError:
+                auto_scouts_count = 5
+
             self.matches = TabMatching.finde_tabs(
                 angriffe=angriffe,
                 eigene_dörfer=eigene_dörfer,
@@ -687,7 +1028,11 @@ class StammGUI:
                 welt_speed=self.welt_speed,
                 einheiten_speed=self.einheiten_speed,
                 zeitfenster_liste=zeitfenster_liste_tz,
-                boost_level=self.boost_level
+                boost_level=self.boost_level,
+                auto_speed_units=auto_speed_units,
+                auto_scouts_enabled=auto_scouts_enabled,
+                auto_scouts_count=auto_scouts_count,
+                min_send_interval_seconds=self.min_send_interval_seconds
             )
 
             
@@ -797,26 +1142,6 @@ class StammGUI:
         return kept, removed
    
 
-    def lade_config(self):
-        try:
-            if os.path.exists(self.CONFIG_DATEI):
-                with open(self.CONFIG_DATEI, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                self.dsu_api_key = (cfg.get("dsu_api_key") or "")
-                self.archer_enabled = bool(cfg.get("archer_enabled", False))
-        except Exception as e:
-            print(f"Fehler beim Laden der Config: {e}")
-
-    def speichere_config(self):
-        try:
-            cfg = {
-                "dsu_api_key": self.dsu_api_key,
-                "archer_enabled": self.archer_enabled,
-            }
-            with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Fehler beim Speichern der Config: {e}")
 
 
     def lade_geschwindigkeiten(self, welt_id):
@@ -886,27 +1211,27 @@ class StammGUI:
         grid = ttk.Frame(container)
         grid.pack()
 
-        year = ttk.Combobox(grid, values=list(range(2024, 2031)), width=5)
+        year = ttk.Combobox(grid, values=[str(y) for y in range(2024, 2031)], width=5)
         year.set(default_time.year)
         year.grid(row=0, column=0)
 
-        month = ttk.Combobox(grid, values=list(range(1, 13)), width=3)
+        month = ttk.Combobox(grid, values=[str(m) for m in range(1, 13)], width=3)
         month.set(default_time.month)
         month.grid(row=0, column=1)
 
-        day = ttk.Combobox(grid, values=list(range(1, 32)), width=3)
+        day = ttk.Combobox(grid, values=[str(d) for d in range(1, 32)], width=3)
         day.set(default_time.day)
         day.grid(row=0, column=2)
 
-        hour = ttk.Combobox(grid, values=list(range(0, 24)), width=3)
+        hour = ttk.Combobox(grid, values=[str(h) for h in range(0, 24)], width=3)
         hour.set(default_time.hour)
         hour.grid(row=1, column=0)
 
-        minute = ttk.Combobox(grid, values=list(range(0, 60)), width=3)
+        minute = ttk.Combobox(grid, values=[str(m) for m in range(0, 60)], width=3)
         minute.set(default_time.minute)
         minute.grid(row=1, column=1)
 
-        second = ttk.Combobox(grid, values=list(range(0, 60)), width=3)
+        second = ttk.Combobox(grid, values=[str(s) for s in range(0, 60)], width=3)
         second.set(default_time.second)
         second.grid(row=1, column=2)
 

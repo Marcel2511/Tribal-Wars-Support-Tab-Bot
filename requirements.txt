@@ -8,3 +8,9 @@ pytz==2024.2
 requests==2.32.3
 setuptools==58.1.0
 urllib3==2.2.3
+
+# Testing dependencies
+pytest==8.3.4
+pytest-cov==6.0.0
+freezegun==1.5.1
+responses==0.25.3

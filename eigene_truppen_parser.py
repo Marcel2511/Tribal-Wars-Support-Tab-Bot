@@ -7,6 +7,7 @@ class EigenesDorf:
     dorf_name: str
     koordinaten: str
     truppen: Dict[str, int]
+    rest_truppen: Dict[str, int] | None = None
 
 class EigeneTruppenParser:
     @staticmethod

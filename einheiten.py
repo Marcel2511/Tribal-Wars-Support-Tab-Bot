@@ -17,11 +17,14 @@ einheiten_aliases = {
     "speertraeger": "Speerträger",
     "speerträger": "Speerträger",
     "schwertkaempfer": "Schwertkämpfer",
+    "schwertkämpfer": "Schwertkämpfer",
     "axtkaempfer": "Axtkämpfer",
+    "axtkämpfer": "Axtkämpfer",
     "spaeher": "Späher",
+    "späher": "Späher",
     "leichte kavallerie": "Leichte Kavallerie",
     "schwere kavallerie": "Schwere Kavallerie",
-    "rammbocke": "Rammböcke",
+    "rammboecke": "Rammböcke",
     "rammböcke": "Rammböcke",
     "katapulte": "Katapulte"
 }
