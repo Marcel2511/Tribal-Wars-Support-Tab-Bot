@@ -61,6 +61,7 @@ class StammGUI:
         self.zeitfenster_tree = None 
         self.tab_config_display: tk.Listbox | None = None
         self.support_filter_enabled = True
+        self.min_send_interval_seconds = 0
 
         self.build_gui()
         self.lade_tabverlauf()
@@ -143,6 +144,16 @@ class StammGUI:
         self.support_filter_seconds_entry.insert(0, "0")
         self.support_filter_seconds_entry.grid(row=4, column=3, sticky="nw", padx=5, pady=(2, 2))
 
+        # Mindestabstand zwischen Tabs
+        ttk.Label(self.tk_root, text="Min. Abstand Tab-Versand (Sek.):").grid(row=5, column=2, sticky="nw", padx=5, pady=(2, 2))
+        self.min_send_interval_entry = ttk.Entry(self.tk_root, width=5)
+        self.min_send_interval_entry.insert(0, "0")
+        self.min_send_interval_entry.grid(row=5, column=3, sticky="nw", padx=5, pady=(2, 2))
+        
+        # Bind save event
+        self.min_send_interval_entry.bind("<FocusOut>", self._on_min_interval_change)
+        self.min_send_interval_entry.bind("<Return>", self._on_min_interval_change)
+
         # Support-Filter aktivieren/deaktivieren
         self.support_filter_var = tk.BooleanVar(value=self.support_filter_enabled)
         ttk.Checkbutton(
@@ -150,7 +161,7 @@ class StammGUI:
             text="Support-Filter aktivieren", 
             variable=self.support_filter_var,
             command=self._on_support_filter_change
-        ).grid(row=5, column=2, columnspan=2, sticky="w", padx=5, pady=(0, 2))
+        ).grid(row=6, column=2, columnspan=2, sticky="w", padx=5, pady=(0, 2))
 
         self.einheiten = {
             "Speerträger": "unit_spear.webp",
@@ -169,7 +180,7 @@ class StammGUI:
         self.tab_config_display = None
 
         unit_frame = ttk.LabelFrame(self.tk_root, text="Einheiten Auswahl")
-        unit_frame.grid(row=6, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
+        unit_frame.grid(row=7, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
 
         for idx, (name, img_file) in enumerate(self.einheiten.items()):
             var = tk.BooleanVar()
@@ -205,7 +216,7 @@ class StammGUI:
 
         # Auto-Einheiten Frame
         auto_frame = ttk.LabelFrame(self.tk_root, text="Automatische Einheiten (für Geschwindigkeit)")
-        auto_frame.grid(row=7, column=0, columnspan=5, padx=10, pady=(0, 10), sticky="ew")
+        auto_frame.grid(row=8, column=0, columnspan=5, padx=10, pady=(0, 10), sticky="ew")
         
         # Konfiguriere Spalten für volle Breite
         for i in range(6):
@@ -262,7 +273,7 @@ class StammGUI:
         ttk.Label(auto_frame, text="(oder so viele wie verfügbar)", foreground="gray").grid(row=5, column=3, sticky="w", padx=(0, 5), pady=(0, 5))
 
         bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
-        bottom_frame.grid(row=8, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
+        bottom_frame.grid(row=9, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
         
         # Damit Treeview sauber strecken kann
         bottom_frame.columnconfigure(0, weight=1)
@@ -353,6 +364,16 @@ class StammGUI:
         """Speichert Support-Filter Einstellung"""
         self.support_filter_enabled = self.support_filter_var.get()
         self.speichere_config()
+
+    def _on_min_interval_change(self, event=None):
+        """Speichert Mindestabstand zwischen Tabs"""
+        try:
+            interval = int(self.min_send_interval_entry.get().strip())
+            if interval >= 0:
+                self.min_send_interval_seconds = interval
+                self.speichere_config()
+        except ValueError:
+            pass
 
     def aktualisiere_parse_ergebnis(self, label):
         """Zeigt sofort das Parse-Ergebnis an"""
@@ -516,10 +537,16 @@ class StammGUI:
                 self.dsu_api_key = (cfg.get("dsu_api_key") or "")
                 self.archer_enabled = bool(cfg.get("archer_enabled", False))
                 self.support_filter_enabled = bool(cfg.get("support_filter_enabled", True))
+                self.min_send_interval_seconds = int(cfg.get("min_send_interval_seconds", 0))
                 
                 # Support-Filter Checkbox aktualisieren
                 if hasattr(self, 'support_filter_var'):
                     self.support_filter_var.set(self.support_filter_enabled)
+                
+                # Min Send Interval aktualisieren
+                if hasattr(self, 'min_send_interval_entry'):
+                    self.min_send_interval_entry.delete(0, tk.END)
+                    self.min_send_interval_entry.insert(0, str(self.min_send_interval_seconds))
                 
                 # Welt-ID laden
                 saved_welt_id = cfg.get("welt_id", "")
@@ -537,6 +564,7 @@ class StammGUI:
                 "archer_enabled": self.archer_enabled,
                 "welt_id": self.welt_id,
                 "support_filter_enabled": self.support_filter_enabled,
+                "min_send_interval_seconds": self.min_send_interval_seconds,
             }
             with open(self.CONFIG_DATEI, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
@@ -1003,7 +1031,8 @@ class StammGUI:
                 boost_level=self.boost_level,
                 auto_speed_units=auto_speed_units,
                 auto_scouts_enabled=auto_scouts_enabled,
-                auto_scouts_count=auto_scouts_count
+                auto_scouts_count=auto_scouts_count,
+                min_send_interval_seconds=self.min_send_interval_seconds
             )
 
             

@@ -40,7 +40,8 @@ class TabMatching:
         boost_level: float = 1.0,
         auto_speed_units: Dict[str, bool] | None = None,
         auto_scouts_enabled: bool = True,
-        auto_scouts_count: int = 5
+        auto_scouts_count: int = 5,
+        min_send_interval_seconds: int = 0
     ) -> List[TabMatch]:
         print(f"[INFO] {len(angriffe)} Angriffe, {len(eigene_dörfer)} eigene Dörfer verarbeitet")
         
@@ -143,6 +144,14 @@ class TabMatching:
             if moegliche_tabs:
                 moegliche_tabs.sort(key=lambda t: (t[0], t[1]))
                 _, _, bester_match = moegliche_tabs[0]
+
+                # Prüfe Mindestabstand zu vorherigen Tabs
+                if min_send_interval_seconds > 0 and matches:
+                    last_send_time = matches[-1].abschickzeit
+                    time_diff = (bester_match.abschickzeit - last_send_time).total_seconds()
+                    if time_diff < min_send_interval_seconds:
+                        # Tab zu nah am vorherigen - überspringen
+                        continue
 
                 for einheit, menge in bester_match.einheiten.items():
                     bester_match.herkunft.rest_truppen[einheit] -= menge
