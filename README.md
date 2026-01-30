@@ -96,6 +96,23 @@ Tribal-Wars-Support-Tab-Bot/
 
 ## 🔧 Entwicklung
 
+### Tests
+
+Das Projekt verfügt über eine umfangreiche Test-Suite:
+
+```bash
+# Test-Abhängigkeiten installieren
+pip install -r requirements.txt
+
+# Alle Tests ausführen
+pytest
+
+# Mit Coverage-Report
+pytest --cov=. --cov-report=html
+```
+
+Siehe [tests/README.md](tests/README.md) für Details.
+
 #### Release erstellen
 
 ```bash

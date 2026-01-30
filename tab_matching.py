@@ -1,20 +1,23 @@
 import base64
 import copy
 import gzip
-import tkinter as tk
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from io import BytesIO
-from tkinter import ttk
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List
 import requests
 
 import pytz
 import requests
 
 from distanz_rechner import DistanzRechner
+from eigene_truppen_parser import EigenesDorf
 from einheiten import get_laufzeit
 
+@dataclass
+class Angriff:
+    ziel_koord: str
+    ankunftszeit: datetime
 
 @dataclass
 class TabMatch:
@@ -28,17 +31,20 @@ class TabMatch:
 class TabMatching:
     @staticmethod
     def finde_tabs(
-        angriffe: List[object],
-        eigene_dörfer: List[object],
+        angriffe: List[Angriff],
+        eigene_dörfer: List[EigenesDorf],
         tabgroessen_liste: List[Dict[str, int]],
         welt_speed: float = 1.0,
         einheiten_speed: float = 1.0,
         zeitfenster_liste=None,
-        boost_level: int = 1
+        boost_level: float = 1.0,
+        auto_speed_units: Dict[str, bool] | None = None,
+        auto_scouts_enabled: bool = True,
+        auto_scouts_count: int = 5,
+        min_send_interval_seconds: int = 0
     ) -> List[TabMatch]:
         print(f"[INFO] {len(angriffe)} Angriffe, {len(eigene_dörfer)} eigene Dörfer verarbeitet")
-
-        matches = []
+        
         name_mapping = {
             "speerträger": "Speerträger",
             "schwertkämpfer": "Schwertkämpfer",
@@ -49,8 +55,19 @@ class TabMatching:
             "katapulte": "Katapulte"
         }
 
-        laufzeit_einheiten = ["Axtkämpfer", "Späher", "Leichte Kavallerie", "Katapulte", "Schwertkämpfer"]
+        # Default Einheiten die für Geschwindigkeit relevant sind (nicht tabrelevant, aber beeinflussen Laufzeit)
+        laufzeit_einheiten = ["Axtkämpfer", "Leichte Kavallerie", "Katapulte", "Schwertkämpfer"]
+        # Einheiten die für die Tab-Größe relevant sind, alle anderen ignorieren wir für die Tabs
         tabrelevante_einheiten = ["Speerträger", "Schwertkämpfer", "Schwere Kavallerie"]
+        
+        if auto_speed_units is None:
+            # Standard: alle Laufzeit-Einheiten aktiviert
+            auto_speed_units = {einheit: True for einheit in laufzeit_einheiten}
+        
+        enabled_speed_units = [name for name, enabled in auto_speed_units.items() if enabled]
+        print(f"[INFO] Auto-Speed-Einheiten: {enabled_speed_units}, Auto-Scouts: {auto_scouts_enabled} (Anzahl: {auto_scouts_count})")
+
+        matches = []
 
         dorf_copies = []
         for dorf in eigene_dörfer:
@@ -58,7 +75,8 @@ class TabMatching:
             dorf_copy.rest_truppen = copy.deepcopy(dorf.truppen)
             dorf_copies.append(dorf_copy)
 
-        now = datetime.now(pytz.timezone("Europe/Berlin"))
+        berlin_tz = pytz.timezone("Europe/Berlin")
+        now = berlin_tz.localize(datetime.now())
 
         for angriff in angriffe:
             moegliche_tabs = []
@@ -78,7 +96,9 @@ class TabMatching:
                     }
 
                     kandidaten = [tab_einheiten.copy()]
-                    for zusatz in laufzeit_einheiten:
+                    
+                    # Auto-Speed: Füge nur die aktivierten Geschwindigkeits-Einheiten hinzu
+                    for zusatz in enabled_speed_units:
                         if zusatz not in tab_einheiten and dorf.rest_truppen.get(zusatz, 0) > 0:
                             erweitert = tab_einheiten.copy()
                             erweitert[zusatz] = 1
@@ -86,11 +106,14 @@ class TabMatching:
 
                     for kandidat in kandidaten:
                         kandidat_mit_spaeh = kandidat.copy()
-                        verfuegbare_spaeh = dorf.rest_truppen.get("Späher", 0)
-                        if verfuegbare_spaeh >= 5:
-                            kandidat_mit_spaeh["Späher"] = 5  # Add-on
-                        elif verfuegbare_spaeh > 0:
-                            kandidat_mit_spaeh["Späher"] = verfuegbare_spaeh  # So viele wie möglich
+                        
+                        # Auto-Scouts: Füge Späher hinzu, wenn aktiviert
+                        if auto_scouts_enabled:
+                            verfuegbare_spaeh = dorf.rest_truppen.get("Späher", 0)
+                            if verfuegbare_spaeh >= auto_scouts_count:
+                                kandidat_mit_spaeh["Späher"] = auto_scouts_count
+                            elif verfuegbare_spaeh > 0:
+                                kandidat_mit_spaeh["Späher"] = verfuegbare_spaeh  # So viele wie möglich
 
                         # Prüfen, ob die tabrelevanten Einheiten vorhanden sind (Späher NICHT relevant für Ausschluss)
                         if not all(dorf.rest_truppen.get(e, 0) >= m for e, m in kandidat.items()):
@@ -121,6 +144,14 @@ class TabMatching:
             if moegliche_tabs:
                 moegliche_tabs.sort(key=lambda t: (t[0], t[1]))
                 _, _, bester_match = moegliche_tabs[0]
+
+                # Prüfe Mindestabstand zu vorherigen Tabs
+                if min_send_interval_seconds > 0 and matches:
+                    last_send_time = matches[-1].abschickzeit
+                    time_diff = (bester_match.abschickzeit - last_send_time).total_seconds()
+                    if time_diff < min_send_interval_seconds:
+                        # Tab zu nah am vorherigen - überspringen
+                        continue
 
                 for einheit, menge in bester_match.einheiten.items():
                     bester_match.herkunft.rest_truppen[einheit] -= menge
