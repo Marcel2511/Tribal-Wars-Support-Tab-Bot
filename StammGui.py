@@ -49,6 +49,8 @@ class StammGUI:
     def __init__(self, root):
         self.tk_root = root
         self.tk_root.title(f"Die Stämme Tab-Tool {version} by {author}")
+        self.tk_root.geometry("865x990")
+        self.tk_root.resizable(True, True)
 
         self.matches = []
         self.tabgroessen_liste = []
@@ -69,15 +71,62 @@ class StammGUI:
         self.archer_enabled = False
         self.lade_config()
 
+    def _setup_scrollable_root(self):
+        self.tk_root.columnconfigure(0, weight=1)
+        self.tk_root.rowconfigure(0, weight=1)
+
+        container = ttk.Frame(self.tk_root)
+        container.grid(row=0, column=0, sticky="nsew")
+        container.columnconfigure(0, weight=1)
+        container.rowconfigure(0, weight=1)
+
+        self.canvas = tk.Canvas(container, highlightthickness=0)
+        v_scroll = ttk.Scrollbar(container, orient="vertical", command=self.canvas.yview)
+        h_scroll = ttk.Scrollbar(container, orient="horizontal", command=self.canvas.xview)
+        self.canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        v_scroll.grid(row=0, column=1, sticky="ns")
+        h_scroll.grid(row=1, column=0, sticky="ew")
+
+        self.content_frame = ttk.Frame(self.canvas)
+        self._content_window = self.canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
+
+        def _on_frame_configure(event):
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+        def _on_canvas_configure(event):
+            req_width = self.content_frame.winfo_reqwidth()
+            self.canvas.itemconfigure(self._content_window, width=max(req_width, event.width))
+
+        self.content_frame.bind("<Configure>", _on_frame_configure)
+        self.canvas.bind("<Configure>", _on_canvas_configure)
+
+        def _on_mousewheel(event):
+            if event.delta:
+                self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def _on_shift_mousewheel(event):
+            if event.delta:
+                self.canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        self.canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self.canvas.bind_all("<Shift-MouseWheel>", _on_shift_mousewheel)
+
     def build_gui(self):
+        self._setup_scrollable_root()
+        parent = self.content_frame
+        for i in range(5):
+            parent.columnconfigure(i, weight=1)
+
         self.text_fields = {}
         self.result_labels = {}
         labels = ["SOS Anfrage", "Eigene Truppen", "Unterstützungen"]
         for idx, label in enumerate(labels):
             row_offset = idx * 2  # Jedes Feld bekommt 2 Zeilen (Text + Ergebnis)
             
-            ttk.Label(self.tk_root, text=label + ":").grid(row=row_offset, column=0, sticky="nw", padx=5, pady=(2, 2))
-            text = tk.Text(self.tk_root, width=60, height=3)
+            ttk.Label(parent, text=label + ":").grid(row=row_offset, column=0, sticky="nw", padx=5, pady=(2, 2))
+            text = tk.Text(parent, width=60, height=3)
             text.grid(row=row_offset, column=1, padx=5, pady=(2, 2))
             self.text_fields[label] = text
             
@@ -112,7 +161,7 @@ class StammGUI:
                 text.bind("<FocusOut>", focus_out)
             
             # Ergebnis-Label in eigener Zeile darunter
-            result_label = ttk.Label(self.tk_root, text="", foreground="blue", wraplength=500, justify="left", font=("Segoe UI", 9))
+            result_label = ttk.Label(parent, text="", foreground="blue", wraplength=500, justify="left", font=("Segoe UI", 9))
             result_label.grid(row=row_offset + 1, column=1, sticky="w", padx=5, pady=(0, 8))
             self.result_labels[label] = result_label
             
@@ -125,8 +174,8 @@ class StammGUI:
                 text.bind("<KeyRelease>", lambda e, lbl=label: self._on_truppen_change(lbl), add="+")
                 text.bind("<<Paste>>", lambda e, lbl=label: self.tk_root.after(100, lambda: self._on_truppen_change(lbl)), add="+")
 
-        ttk.Label(self.tk_root, text="Welt-ID (z.B. 236):").grid(row=0, column=2, sticky="nw", padx=5, pady=(2, 2))
-        self.welt_id_entry = ttk.Entry(self.tk_root, width=5)
+        ttk.Label(parent, text="Welt-ID (z.B. 236):").grid(row=0, column=2, sticky="nw", padx=5, pady=(2, 2))
+        self.welt_id_entry = ttk.Entry(parent, width=5)
         self.welt_id_entry.grid(row=0, column=3, sticky="nw", padx=5, pady=(2, 2))
 
         # Speichere Welt-ID bei jeder Änderung
@@ -134,19 +183,19 @@ class StammGUI:
         self.welt_id_entry.bind("<Return>", self._on_welt_id_change)
 
 
-        ttk.Label(self.tk_root, text="LZ-Multiplikator(%):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
-        self.boost_entry = ttk.Entry(self.tk_root, width=5)
+        ttk.Label(parent, text="LZ-Multiplikator(%):").grid(row=2, column=2, sticky="nw", padx=5, pady=(2, 2))
+        self.boost_entry = ttk.Entry(parent, width=5)
         self.boost_entry.insert(0, "0")
         self.boost_entry.grid(row=2, column=3, sticky="nw", padx=5, pady=(2, 2))
 
-        ttk.Label(self.tk_root, text="Support-Filter (+Sek. nach Angriff):").grid(row=4, column=2, sticky="nw", padx=5, pady=(2, 2))
-        self.support_filter_seconds_entry = ttk.Entry(self.tk_root, width=5)
+        ttk.Label(parent, text="Support-Filter (+Sek. nach Angriff):").grid(row=4, column=2, sticky="nw", padx=5, pady=(2, 2))
+        self.support_filter_seconds_entry = ttk.Entry(parent, width=5)
         self.support_filter_seconds_entry.insert(0, "0")
         self.support_filter_seconds_entry.grid(row=4, column=3, sticky="nw", padx=5, pady=(2, 2))
 
         # Mindestabstand zwischen Tabs
-        ttk.Label(self.tk_root, text="Min. Abstand Tab-Versand (Sek.):").grid(row=5, column=2, sticky="nw", padx=5, pady=(2, 2))
-        self.min_send_interval_entry = ttk.Entry(self.tk_root, width=5)
+        ttk.Label(parent, text="Min. Abstand Tab-Versand (Sek.):").grid(row=5, column=2, sticky="nw", padx=5, pady=(2, 2))
+        self.min_send_interval_entry = ttk.Entry(parent, width=5)
         self.min_send_interval_entry.insert(0, "0")
         self.min_send_interval_entry.grid(row=5, column=3, sticky="nw", padx=5, pady=(2, 2))
         
@@ -157,7 +206,7 @@ class StammGUI:
         # Support-Filter aktivieren/deaktivieren
         self.support_filter_var = tk.BooleanVar(value=self.support_filter_enabled)
         ttk.Checkbutton(
-            self.tk_root, 
+            parent, 
             text="Support-Filter aktivieren", 
             variable=self.support_filter_var,
             command=self._on_support_filter_change
@@ -179,7 +228,7 @@ class StammGUI:
         self.image_refs = {}
         self.tab_config_display = None
 
-        unit_frame = ttk.LabelFrame(self.tk_root, text="Einheiten Auswahl")
+        unit_frame = ttk.LabelFrame(parent, text="Einheiten Auswahl")
         unit_frame.grid(row=7, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
 
         for idx, (name, img_file) in enumerate(self.einheiten.items()):
@@ -215,7 +264,7 @@ class StammGUI:
         ttk.Button(button_frame, text="Verlauf löschen", width=22, command=self.verlauf_loeschen).pack(side="top")
 
         # Auto-Einheiten Frame
-        auto_frame = ttk.LabelFrame(self.tk_root, text="Automatische Einheiten (für Geschwindigkeit)")
+        auto_frame = ttk.LabelFrame(parent, text="Automatische Einheiten (für Geschwindigkeit)")
         auto_frame.grid(row=8, column=0, columnspan=5, padx=10, pady=(0, 10), sticky="ew")
         
         # Konfiguriere Spalten für volle Breite
@@ -272,7 +321,7 @@ class StammGUI:
         
         ttk.Label(auto_frame, text="(oder so viele wie verfügbar)", foreground="gray").grid(row=5, column=3, sticky="w", padx=(0, 5), pady=(0, 5))
 
-        bottom_frame = ttk.LabelFrame(self.tk_root, text="Zeitfenster")
+        bottom_frame = ttk.LabelFrame(parent, text="Zeitfenster")
         bottom_frame.grid(row=9, column=0, columnspan=5, pady=20, padx=10, sticky="ew")
         
         # Damit Treeview sauber strecken kann
